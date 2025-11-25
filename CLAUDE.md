@@ -548,7 +548,14 @@ afterRender() {
 
 ## Security Best Practices
 
-The framework has built-in security protections, but follow these guidelines:
+The framework has built-in security protections with defense-in-depth:
+
+### Security Architecture
+
+1. **Symbol-based trust markers**: The framework uses non-exported Symbols for `html` and `raw` markers, preventing JSON injection attacks
+2. **Crypto-random prop IDs**: Object/array props use unpredictable IDs to prevent reference tampering
+3. **Context-aware escaping**: Automatic XSS protection based on interpolation context
+4. **Attribute sanitization**: URL validation, boolean attribute handling, and dangerous attribute blocking
 
 ### 1. XSS Protection
 

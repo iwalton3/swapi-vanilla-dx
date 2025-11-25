@@ -131,3 +131,45 @@ describe('Template Security', function(it) {
         assert.ok(!str.includes('disabled'), 'Should not include disabled');
     });
 });
+
+describe('Template Security - Symbol Protection', function(it) {
+    it('prevents __raw__ spoofing from JSON', () => {
+        // Malicious JSON trying to inject as trusted HTML
+        const maliciousData = {
+            __raw__: true,
+            toString: () => '<script>alert("xss")</script>'
+        };
+
+        const result = html`<div>${maliciousData}</div>`;
+        const str = result.toString();
+
+        // Should be escaped, not treated as raw HTML
+        assert.ok(str.includes('&lt;script'), 'Should escape script tag');
+        assert.ok(!str.includes('<script>'), 'Should not allow unescaped script');
+    });
+
+    it('prevents __html__ spoofing from JSON', () => {
+        // Malicious JSON trying to bypass escaping
+        const maliciousData = {
+            __html__: true,
+            toString: () => '<img src=x onerror=alert(1)>'
+        };
+
+        const result = html`<div>${maliciousData}</div>`;
+        const str = result.toString();
+
+        // Should be escaped, not treated as safe HTML
+        assert.ok(str.includes('&lt;img'), 'Should escape img tag');
+        assert.ok(!str.includes('<img src=x'), 'Should not allow unescaped img');
+    });
+
+    it('allows actual raw() to work', () => {
+        // Legitimate use of raw()
+        const trusted = raw('<b>Bold</b>');
+        const result = html`<div>${trusted}</div>`;
+        const str = result.toString();
+
+        // Should pass through unescaped
+        assert.ok(str.includes('<div><b>Bold</b></div>'), 'Should allow raw HTML from raw()');
+    });
+});

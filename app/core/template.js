@@ -3,9 +3,38 @@
  * Provides XSS protection by automatically detecting interpolation context
  */
 
+// Security: Use Symbols to prevent spoofing of trusted content markers
+// Symbols are private - only helper functions are exported
+const HTML_MARKER = Symbol('html');
+const RAW_MARKER = Symbol('raw');
+
+// Helper functions to check markers (safe API for other code)
+export const isHtml = (obj) => obj && obj[HTML_MARKER] === true;
+export const isRaw = (obj) => obj && obj[RAW_MARKER] === true;
+
 // Prop binding registry - stores actual object/array values
 const propRegistry = new Map();
+
+// Security: Use crypto-random prefix to prevent prop marker tampering
+// Generate once on page load for performance, then use sequential IDs
+let propIdPrefix = null;
 let propIdCounter = 0;
+
+function generatePropId() {
+    // Generate 6-char random hex prefix once on first use (16^6 = 16.7M combinations)
+    if (propIdPrefix === null) {
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+            const arr = new Uint8Array(3); // 3 bytes = 6 hex chars
+            crypto.getRandomValues(arr);
+            propIdPrefix = Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+        } else {
+            // Fallback: random hex from Math.random
+            propIdPrefix = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+        }
+    }
+    // Use prefix + sequential counter for performance
+    return `${propIdPrefix}-${propIdCounter++}`;
+}
 
 // URL attributes that need URL sanitization
 const URL_ATTRIBUTES = new Set([
@@ -214,14 +243,14 @@ export function html(strings, ...values) {
         if (i < values.length) {
             const value = values[i];
 
-            // Allow explicit raw() for trusted HTML
-            if (value && value.__raw__) {
+            // Allow explicit raw() for trusted HTML (using Symbol for security)
+            if (isRaw(value)) {
                 result += normalizeInput(value.toString());
                 return;
             }
 
-            // Allow nested html() calls without double-escaping
-            if (value && value.__html__) {
+            // Allow nested html() calls without double-escaping (using Symbol)
+            if (isHtml(value)) {
                 result += value.toString();
                 return;
             }
@@ -233,8 +262,9 @@ export function html(strings, ...values) {
                 case 'custom-element-attr':
                     // For custom elements, store actual value and insert marker
                     // This allows passing objects/arrays without stringification
+                    // Security: Use crypto-random IDs to prevent marker tampering
                     if (typeof value === 'object' && value !== null) {
-                        const id = propIdCounter++;
+                        const id = generatePropId();
                         propRegistry.set(id, value);
                         result += `__PROP_${id}__`;
                     } else {
@@ -312,8 +342,9 @@ export function html(strings, ...values) {
     result = result.replace(/\s+[\w-]+\s*=\s*["']\x00REMOVE_ATTR\x00["']/g, '');
 
     // Return a special object that marks this as already-processed HTML
+    // Security: Use Symbol for trust verification (JSON can't fake this)
     return {
-        __html__: true,
+        [HTML_MARKER]: true,
         toString() {
             return result;
         }
@@ -323,10 +354,11 @@ export function html(strings, ...values) {
 /**
  * Mark string as safe raw HTML (use sparingly!)
  * Only use this for content you absolutely trust (e.g., your own API responses)
+ * Security: Use Symbol for trust verification (JSON can't fake this)
  */
 export function raw(htmlString) {
     return {
-        __raw__: true,
+        [RAW_MARKER]: true,
         toString() {
             return htmlString;
         }
@@ -343,17 +375,18 @@ export function debugContext(templateString) {
 /**
  * Check if a string is a prop marker and retrieve the actual value
  * Returns null if not a prop marker
- * Note: Values are kept in registry and cleaned up later via WeakMap GC
+ * Security: Markers use 6-char random hex prefix to prevent tampering
  */
 export function getPropValue(str) {
     if (typeof str !== 'string') return null;
 
-    const match = str.match(/^__PROP_(\d+)__$/);
+    // Match format: __PROP_<6-hex-chars>-<number>__
+    const match = str.match(/^__PROP_([a-f0-9]{6}-\d+)__$/i);
     if (match) {
-        const id = parseInt(match[1]);
+        const id = match[1];
         const value = propRegistry.get(id);
         // Don't delete immediately - let multiple reads happen
-        // Registry will grow but numbers are small and it clears on page nav
+        // Registry will grow but clears on page navigation
         return value;
     }
     return null;
@@ -378,8 +411,8 @@ export function cleanupPropRegistry() {
 export function when(condition, thenValue, elseValue = '') {
     const result = condition ? thenValue : elseValue;
 
-    // Handle html template objects
-    if (result && result.__html__) {
+    // Handle html template objects (check Symbol for security)
+    if (isHtml(result)) {
         return result;
     }
 
@@ -403,9 +436,9 @@ export function each(array, mapFn) {
 
     const results = array.map(mapFn);
 
-    // Join all html objects together
+    // Join all html objects together (check Symbol for security)
     const joined = results.map(r => {
-        if (r && r.__html__) {
+        if (isHtml(r)) {
             return r.toString();
         }
         return escapeHtml(r);
