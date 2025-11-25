@@ -1,0 +1,388 @@
+/**
+ * Global Styles - Matching original application theme
+ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    touch-action: manipulation;
+}
+
+body {
+    min-height: 100vh;
+    border-top: 10px solid #ECEEF1;
+    border-bottom: 10px solid #ECEEF1;
+    color: #61666c;
+    font-size: 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    line-height: 1.5rem;
+    padding: 0px 20px 0px;
+
+    /* CSS variables for theming (penetrate Shadow DOM) */
+    --input-bg: white;
+    --input-border: #ddd;
+    --input-text: #000;
+    --input-focus-border: #0066cc;
+    --input-hover-bg: #f5f5f5;
+}
+
+code {
+    font-family: consolas, monospace;
+}
+
+h1, h2, h3, h4 {
+    margin-top: 0;
+}
+
+a {
+    color: #2222FF;
+    text-decoration: none;
+}
+
+a:visited {
+    color: #802280;
+}
+
+nav a.title {
+    color: #2a2a2a;
+}
+
+label {
+    display: block;
+}
+
+x-icon {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+x-icon img {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
+button.link {
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    color: #2222FF;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.5rem;
+}
+
+button:disabled, input[type="submit"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+select,
+textarea,
+button,
+input[type="submit"] {
+    padding: 8px;
+    border: 1px solid var(--input-border, #ddd);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    background-color: var(--input-bg, white);
+    color: var(--input-text, #000);
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: #0066cc;
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+form {
+    margin: 10px 0;
+}
+
+label {
+    display: block;
+    margin: 10px 0;
+}
+
+div.section {
+    margin-bottom: 1.5rem;
+}
+
+table, td {
+    border: solid 1px black;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    width: 100%;
+}
+
+td {
+    padding: 8px;
+}
+
+input[type="radio"] {
+    appearance: radio;
+}
+
+input[type="checkbox"] {
+    appearance: checkbox;
+}
+
+/* Tile layout for app navigation */
+.tiles-container {
+    padding-top: 10px;
+    overflow: auto;
+}
+
+.tile {
+    text-align: center;
+    width: 110px;
+    height: 90px;
+    float: left;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.tile a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.tile img {
+    color: rgba(0,0,0,0);
+    overflow: hidden;
+    height: 48px;
+    width: 48px;
+}
+
+.tile div {
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+/* Router link styling */
+router-link {
+    display: inline;
+}
+
+router-link a {
+    color: #2222FF;
+    text-decoration: none;
+}
+
+router-link a:visited {
+    color: #802280;
+}
+
+router-link a:hover {
+    text-decoration: underline;
+}
+
+/* Tile router links should inherit color */
+router-link.tile,
+router-link.tile a {
+    text-decoration: none;
+    color: inherit;
+}
+
+router-link.tile a:visited {
+    color: inherit;
+}
+
+body.dark router-link a {
+    color: #b1cbf7;
+}
+
+body.dark router-link a:visited {
+    color: #cdb4e7;
+}
+
+.error {
+    color: #d32f2f;
+    background: #ffebee;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+.success {
+    color: #388e3c;
+    background: #e8f5e9;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+.info {
+    color: #1976d2;
+    background: #e3f2fd;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 10px 0;
+}
+
+/* Notification list */
+.notify-list {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    width: 350px;
+}
+
+.notify {
+    margin: 7px;
+    padding: 0 3px;
+    position: relative;
+    padding-left: 23px;
+}
+
+.notify img {
+    position: absolute;
+    left: 4px;
+    top: 4px;
+}
+
+.notify.warn {
+    background-color: #f8f2be;
+    border: 1px #a39306 solid;
+}
+
+.notify.info {
+    background-color: #BDE5F8;
+    border: 1px #075BA3 solid;
+}
+
+.notify.error {
+    background-color: #f8bec0;
+    border: 1px #a30609 solid;
+}
+
+/* Mobile responsive */
+@media only screen and (max-width: 480px) {
+    .notify-list {
+        right: 0;
+        width: 100%;
+    }
+
+    input, button, textarea, select {
+        font-size: 16px;
+    }
+}
+
+/* Small input class from original */
+.sm {
+    width: 3em;
+}
+
+/* Dark theme - matching original Svelte theme exactly */
+body.dark {
+    border-color: #222;
+    background: #111;
+    color: #ccc;
+
+    /* Override CSS variables for dark theme */
+    --input-bg: #353535;
+    --input-border: #555;
+    --input-text: #ccc;
+    --input-focus-border: #0066cc;
+    --input-hover-bg: #454545;
+}
+
+body.dark * {
+    border-color: #555 !important;
+}
+
+body.dark a,
+body.dark button.link {
+    color: #b1cbf7;
+}
+
+body.dark a:visited {
+    color: #cdb4e7;
+}
+
+body.dark input:not([type="checkbox"]):not([type="radio"]),
+body.dark button,
+body.dark textarea,
+body.dark select {
+    appearance: none;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid #555;
+    background-color: #353535;
+    color: #ccc;
+}
+
+body.dark input[type="checkbox"],
+body.dark input[type="radio"] {
+    /* Keep native appearance for checkboxes and radios */
+    width: auto;
+    height: auto;
+}
+
+body.dark button:hover:not(:disabled) {
+    background-color: #454545;
+}
+
+body.dark h1,
+body.dark h2,
+body.dark h3,
+body.dark h4,
+body.dark h5,
+body.dark h6 {
+    width: 100%;
+    border-radius: 5px;
+}
+
+body.dark h1,
+body.dark h2 {
+    background-color: #28313e;
+}
+
+body.dark h3,
+body.dark h4 {
+    background-color: #2a3731;
+}
+
+body.dark h5,
+body.dark h6 {
+    background-color: #372a2a;
+}
+
+body.dark nav a.title {
+    color: #ccc;
+}
+
+body.dark .notify.warn {
+    background-color: #a39306 !important;
+    border: 1px #f8f2be solid !important;
+    color: #f8f2be !important;
+}
+
+body.dark .notify.info {
+    background-color: #075BA3 !important;
+    border: 1px #BDE5F8 solid !important;
+    color: #BDE5F8 !important;
+}
+
+body.dark .notify.error {
+    background-color: #a30609 !important;
+    border: 1px #f8bec0 solid !important;
+    color: #f8bec0 !important;
+}

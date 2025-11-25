@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framework Test Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 10px;
+        }
+
+        #console {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .test-results {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .test-results h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat {
+            padding: 15px;
+            border-radius: 6px;
+            background: #f8f9fa;
+            border-left: 4px solid #0066cc;
+        }
+
+        .summary.success {
+            border-left-color: #28a745;
+        }
+
+        .summary.success .stat {
+            border-left-color: #28a745;
+        }
+
+        .summary.failure .stat {
+            border-left-color: #dc3545;
+        }
+
+        .stat .label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .stat .value {
+            display: block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0066cc;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            background: #0052a3;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Framework Test Suite</h1>
+
+    <div>
+        <button type="button" id="runTestsBtn">Run Tests</button>
+        <button type="button" id="clearConsoleBtn">Clear Console</button>
+        <button type="button" id="copyErrorsBtn" style="display:none;">Copy Errors</button>
+        <span id="copyStatus" style="margin-left: 10px; color: #28a745;"></span>
+    </div>
+
+    <div id="results"></div>
+    <div id="console"></div>
+
+    <script type="module">
+        import { runner } from './test-runner.js';
+
+        // Import all test files
+        import './reactivity.test.js';
+        import './store.test.js';
+        import './template.test.js';
+        import './component.test.js';
+        import './auth.test.js';
+        import './router.test.js';
+        import './utils.test.js';
+        import './vdom.test.js';
+
+        // Capture console output
+        const consoleDiv = document.getElementById('console');
+        const originalConsole = {
+            log: console.log,
+            error: console.error
+        };
+
+        function appendToConsole(message, type = 'log') {
+            const color = type === 'error' ? '#ff6b6b' : '#d4d4d4';
+            const line = document.createElement('div');
+            line.style.color = color;
+            line.textContent = message;
+            consoleDiv.appendChild(line);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+
+        console.log = (...args) => {
+            const message = args.map(arg =>
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            appendToConsole(message, 'log');
+            originalConsole.log(...args);
+        };
+
+        console.error = (...args) => {
+            const message = args.map(arg =>
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            appendToConsole(message, 'error');
+            originalConsole.error(...args);
+        };
+
+        // Store errors for copying
+        let testErrors = [];
+
+        // Define functions in global scope
+        async function runTests() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Running tests...</p></div>';
+
+            // Reset errors
+            testErrors = [];
+            document.getElementById('copyErrorsBtn').style.display = 'none';
+            document.getElementById('copyStatus').textContent = '';
+
+            // Small delay to show loading state
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Capture errors during test run
+            const originalError = console.error;
+            console.error = (...args) => {
+                testErrors.push(args.join(' '));
+                originalError(...args);
+            };
+
+            await runner.run();
+            runner.renderResults(resultsDiv);
+
+            // Show copy button if there were failures
+            if (runner.results.failed > 0) {
+                document.getElementById('copyErrorsBtn').style.display = 'inline-block';
+            }
+        }
+
+        function clearConsole() {
+            consoleDiv.innerHTML = '';
+        }
+
+        async function copyErrors() {
+            const copyBtn = document.getElementById('copyErrorsBtn');
+            const statusSpan = document.getElementById('copyStatus');
+
+            // Build error report
+            const report = [
+                '# Test Failures Report',
+                '',
+                `Total Tests: ${runner.results.total}`,
+                `Passed: ${runner.results.passed}`,
+                `Failed: ${runner.results.failed}`,
+                '',
+                '## Errors:',
+                '',
+                ...testErrors
+            ].join('\n');
+
+            try {
+                await navigator.clipboard.writeText(report);
+                statusSpan.textContent = '✅ Copied to clipboard!';
+                statusSpan.style.color = '#28a745';
+
+                setTimeout(() => {
+                    statusSpan.textContent = '';
+                }, 3000);
+            } catch (err) {
+                statusSpan.textContent = '❌ Failed to copy';
+                statusSpan.style.color = '#dc3545';
+                console.error('Failed to copy:', err);
+            }
+        }
+
+        // Auto-run tests on page load
+        window.addEventListener('load', async () => {
+            // Set up button event listeners after DOM is loaded
+            document.getElementById('runTestsBtn').addEventListener('click', runTests);
+            document.getElementById('clearConsoleBtn').addEventListener('click', clearConsole);
+            document.getElementById('copyErrorsBtn').addEventListener('click', copyErrors);
+
+            // Run tests
+            await runTests();
+        });
+    </script>
+</body>
+</html>

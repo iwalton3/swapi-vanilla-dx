@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/">
+    <title>iwalton.com</title>
+    <link rel="stylesheet" href="styles/global.css">
+</head>
+<body>
+    <div style="margin: 0 auto; max-width: 700px; padding: 0 20px;">
+        <app-header></app-header>
+        <router-outlet></router-outlet>
+    </div>
+    <notification-list></notification-list>
+    <script type="module" src="app.js"></script>
+    <script type="module">
+        // Apply dark theme on page load
+        import { darkTheme } from './core/utils.js';
+
+        darkTheme.subscribe(state => {
+            if (state.enabled) {
+                document.body.classList.add('dark');
+            } else {
+                document.body.classList.remove('dark');
+            }
+        });
+    </script>
+</body>
+</html>

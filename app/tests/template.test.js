@@ -1,0 +1,133 @@
+/**
+ * Tests for Template System (Security & Escaping)
+ */
+
+import { describe, assert } from './test-runner.js';
+import { html, raw } from '../core/template.js';
+
+describe('Template Security', function(it) {
+    it('escapes HTML content', () => {
+        const userInput = '<script>alert("xss")</script>';
+        const result = html`<div>${userInput}</div>`;
+        assert.ok(result.toString().includes('&lt;script&gt;'), 'Should escape < and >');
+        assert.ok(!result.toString().includes('<script>'), 'Should not contain unescaped script tags');
+    });
+
+    it('escapes HTML attributes', () => {
+        const userInput = '"><script>alert("xss")</script>';
+        const result = html`<div title="${userInput}">content</div>`;
+        assert.ok(result.toString().includes('&quot;'), 'Should escape quotes');
+        assert.ok(!result.toString().includes('"><script'), 'Should not allow attribute injection');
+    });
+
+    it('sanitizes URLs in href', () => {
+        const maliciousUrl = 'javascript:alert(document.cookie)';
+        const result = html`<a href="${maliciousUrl}">Link</a>`;
+        assert.ok(!result.toString().includes('javascript:'), 'Should block javascript: URLs');
+        assert.ok(result.toString().includes('href=""'), 'Should result in empty href');
+    });
+
+    it('sanitizes URLs in src', () => {
+        const maliciousUrl = 'data:text/html,<script>alert("xss")</script>';
+        const result = html`<img src="${maliciousUrl}">`;
+        assert.ok(!result.toString().includes('data:'), 'Should block data: URLs');
+    });
+
+    it('allows safe URL schemes', () => {
+        const httpUrl = 'https://example.com';
+        const result = html`<a href="${httpUrl}">Link</a>`;
+        assert.ok(result.toString().includes('https://example.com'), 'Should allow HTTPS URLs');
+
+        const mailtoUrl = 'mailto:user@example.com';
+        const result2 = html`<a href="${mailtoUrl}">Email</a>`;
+        assert.ok(result2.toString().includes('mailto:'), 'Should allow mailto: URLs');
+    });
+
+    it('handles raw HTML explicitly', () => {
+        const trustedHTML = '<p>Trusted content</p>';
+        const result = html`<div>${raw(trustedHTML)}</div>`;
+        assert.ok(result.toString().includes('<p>Trusted content</p>'), 'Should include raw HTML');
+    });
+
+    it('normalizes Unicode to prevent encoding attacks', () => {
+        // Unicode normalization test
+        const weirdInput = '\uFEFF<script>';
+        const result = html`<div>${weirdInput}</div>`;
+        assert.ok(!result.toString().includes('\uFEFF'), 'Should remove BOM');
+    });
+
+    it('escapes special characters in content', () => {
+        const special = '& < > " \' /';
+        const result = html`<div>${special}</div>`;
+        assert.ok(result.toString().includes('&amp;'), 'Should escape &');
+        assert.ok(result.toString().includes('&lt;'), 'Should escape <');
+        assert.ok(result.toString().includes('&gt;'), 'Should escape >');
+        assert.ok(result.toString().includes('&quot;'), 'Should escape "');
+    });
+
+    it('handles null and undefined', () => {
+        const result1 = html`<div>${null}</div>`;
+        const result2 = html`<div>${undefined}</div>`;
+        assert.ok(result1.toString().includes('<div></div>'), 'Should handle null');
+        assert.ok(result2.toString().includes('<div></div>'), 'Should handle undefined');
+    });
+
+    it('handles numbers and booleans', () => {
+        const result = html`<div>${42} ${true} ${false}</div>`;
+        assert.ok(result.toString().includes('42'), 'Should handle numbers');
+        assert.ok(result.toString().includes('true'), 'Should handle booleans');
+    });
+
+    it('decodes HTML entities in URL detection', () => {
+        const encodedJs = 'javascript&#58;alert(1)';
+        const result = html`<a href="${encodedJs}">Link</a>`;
+        assert.ok(!result.toString().includes('javascript'), 'Should detect encoded javascript:');
+    });
+
+    it('handles boolean true in boolean attributes', () => {
+        const result = html`<option selected="${true}">Test</option>`;
+        const str = result.toString();
+        assert.ok(str.includes('selected=""'), 'Should add attribute with empty value for true');
+        assert.ok(!str.includes('selected="true"'), 'Should not stringify boolean true');
+    });
+
+    it('handles boolean false in boolean attributes', () => {
+        const result = html`<option selected="${false}">Test</option>`;
+        const str = result.toString();
+        assert.ok(!str.includes('selected'), 'Should remove attribute for false');
+    });
+
+    it('handles undefined in boolean attributes', () => {
+        const result = html`<option selected="${undefined}">Test</option>`;
+        const str = result.toString();
+        assert.ok(!str.includes('selected'), 'Should remove attribute for undefined');
+    });
+
+    it('handles null in boolean attributes', () => {
+        const result = html`<option selected="${null}">Test</option>`;
+        const str = result.toString();
+        assert.ok(!str.includes('selected'), 'Should remove attribute for null');
+    });
+
+    it('handles string values in boolean attributes', () => {
+        const result = html`<option selected="${'true'}">Test</option>`;
+        const str = result.toString();
+        assert.ok(str.includes('selected="true"'), 'Should keep string "true" as-is');
+    });
+
+    it('handles undefined in any attribute', () => {
+        const result = html`<div class="${undefined}" data-foo="${undefined}">Test</div>`;
+        const str = result.toString();
+        assert.ok(!str.includes('class='), 'Should remove class attribute for undefined');
+        assert.ok(!str.includes('data-foo='), 'Should remove data-foo attribute for undefined');
+    });
+
+    it('handles multiple boolean attributes conditionally', () => {
+        const isChecked = true;
+        const isDisabled = false;
+        const result = html`<input type="checkbox" checked="${isChecked}" disabled="${isDisabled}">`;
+        const str = result.toString();
+        assert.ok(str.includes('checked=""'), 'Should include checked');
+        assert.ok(!str.includes('disabled'), 'Should not include disabled');
+    });
+});
