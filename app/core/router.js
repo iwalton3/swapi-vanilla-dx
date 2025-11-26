@@ -67,25 +67,50 @@ export class Router {
             meta: {}
         });
 
+        // Track listeners for cleanup
+        this._listeners = [];
+
         // Setup listeners based on routing mode
         if (this.useHTML5) {
             // HTML5 routing: listen to popstate
-            window.addEventListener('popstate', () => this.handleRoute());
+            const popstateHandler = () => this.handleRoute();
+            window.addEventListener('popstate', popstateHandler);
+            this._listeners.push({ event: 'popstate', handler: popstateHandler });
 
             // Also handle hash URLs and redirect to clean URLs
-            window.addEventListener('hashchange', () => {
+            const hashchangeHandler = () => {
                 if (window.location.hash) {
                     const path = window.location.hash.slice(1);
                     this.replace(path);
                 }
-            });
+            };
+            window.addEventListener('hashchange', hashchangeHandler);
+            this._listeners.push({ event: 'hashchange', handler: hashchangeHandler });
         } else {
             // Hash routing: listen to hashchange
-            window.addEventListener('hashchange', () => this.handleRoute());
+            const hashchangeHandler = () => this.handleRoute();
+            window.addEventListener('hashchange', hashchangeHandler);
+            this._listeners.push({ event: 'hashchange', handler: hashchangeHandler });
         }
 
         // Handle initial route
         this.handleRoute();
+    }
+
+    /**
+     * Clean up router resources
+     * Call this when destroying the router instance
+     */
+    destroy() {
+        // Remove all event listeners
+        this._listeners.forEach(({ event, handler }) => {
+            window.removeEventListener(event, handler);
+        });
+        this._listeners = [];
+
+        // Clear hooks
+        this.beforeHooks = [];
+        this.afterHooks = [];
     }
 
     /**
@@ -351,47 +376,45 @@ export function defineRouterLink(router) {
 
     class RouterLink extends HTMLElement {
         connectedCallback() {
-            const to = this.getAttribute('to') || '/';
-            const content = this.innerHTML; // Preserve HTML content including images
+            // Store original content before Preact clears it
+            if (!this._originalContent) {
+                this._originalContent = this.innerHTML;
+                this._to = this.getAttribute('to') || '/';
+                this._attrs = Array.from(this.attributes)
+                    .filter(attr => {
+                        if (attr.name === 'to') return false;
+                        if (attr.name.startsWith('on')) return false;
+                        return true;
+                    })
+                    .map(attr => {
+                        const escapedValue = attr.value
+                            .replace(/&/g, '&amp;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;');
+                        return `${attr.name}="${escapedValue}"`;
+                    })
+                    .join(' ');
+            }
+
+            const to = this._to;
+            const content = this._originalContent;
+            const attrs = this._attrs;
 
             // Generate URL based on router mode
             const href = router ? router.url(to) : `#${to}`;
-
-            // Security: Filter and sanitize attributes to prevent XSS
-            const safeAttrNames = new Set(['class', 'id', 'style', 'title', 'aria-label', 'aria-describedby', 'role', 'tabindex']);
-            const attrs = Array.from(this.attributes)
-                .filter(attr => {
-                    // Block 'to' attribute
-                    if (attr.name === 'to') return false;
-                    // Block all event handlers (on*)
-                    if (attr.name.startsWith('on')) return false;
-                    // Allow data-* attributes
-                    if (attr.name.startsWith('data-')) return true;
-                    // Allow aria-* attributes
-                    if (attr.name.startsWith('aria-')) return true;
-                    // Allow safe attributes
-                    return safeAttrNames.has(attr.name);
-                })
-                .map(attr => {
-                    // Escape attribute values to prevent injection
-                    const escapedValue = attr.value
-                        .replace(/&/g, '&amp;')
-                        .replace(/"/g, '&quot;')
-                        .replace(/</g, '&lt;')
-                        .replace(/>/g, '&gt;');
-                    return `${attr.name}="${escapedValue}"`;
-                })
-                .join(' ');
 
             this.innerHTML = `<a href="${href}" ${attrs}>${content}</a>`;
 
             // Intercept clicks for HTML5 routing
             if (router && router.useHTML5) {
                 const link = this.querySelector('a');
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    router.navigate(to);
-                });
+                if (link) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        router.navigate(to);
+                    });
+                }
             }
         }
     }

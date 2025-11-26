@@ -9,9 +9,6 @@ export default defineComponent('x-tiles', {
         tiles: []
     },
 
-    // Don't use Shadow DOM - router-link needs to work with global routing
-    useShadowDOM: false,
-
     template() {
         const tiles = this.props.tiles || [];
 
@@ -34,7 +31,7 @@ export default defineComponent('x-tiles', {
                                 <div>${tile.name}</div>
                             </a>
                         `
-                )}
+                , tile => tile.path)}
             </div>
         `;
     }

@@ -7,7 +7,7 @@ import * as api from '../api.js';
 
 class Login {
     constructor() {
-        this.capabilities = new Set();
+        this.capabilities = [];  // Use array instead of Set for reactivity
         this.user = null;
         this.partialLogin = null;
         this.updated = null;
@@ -19,7 +19,7 @@ class Login {
      * @returns {boolean}
      */
     has(capability) {
-        return this.capabilities.has(capability);
+        return this.capabilities.includes(capability);
     }
 
     /**
@@ -72,8 +72,9 @@ class Login {
      * Update user details and capabilities
      */
     async upd() {
-        const { capabilities, user } = await api.getDetails();
-        this.capabilities = new Set(capabilities);
+        const response = await api.getDetails();
+        const { capabilities, user } = response;
+        this.capabilities = capabilities;  // Store as array for reactivity
         this.user = user;
         if (this.updated) this.updated(this);
     }
@@ -93,7 +94,7 @@ function loginStore() {
         console.error('[Auth] Failed to initialize auth state:', error);
         // Set default unauthenticated state on error
         login.user = null;
-        login.capabilities = new Set();
+        login.capabilities = [];
         store.set(login);
     });
 

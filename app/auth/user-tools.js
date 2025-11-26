@@ -2,7 +2,7 @@
  * UserTools - Account widget showing login/logout options
  */
 import { defineComponent } from '../core/component.js';
-import { html } from '../core/template.js';
+import { html, when } from '../core/template.js';
 import login from './auth.js';
 import { darkTheme } from '../core/utils.js';
 import '../components/icon.js';
@@ -55,7 +55,7 @@ export default defineComponent('user-tools', {
         return html`
             <div class="section">
                 <h3>Account</h3>
-                ${state.user ? html`
+                ${when(state.user, html`
                     <p>Welcome, ${state.user}!</p>
                     <p>
                         <x-icon icon="leave" alt="logoff"></x-icon>
@@ -65,13 +65,13 @@ export default defineComponent('user-tools', {
                         <x-icon icon="leave" alt="logoff all"></x-icon>
                         <router-link to="/auth/logoff-all/">Log Off All Browsers</router-link>
                     </p>
-                ` : html`
+                `, html`
                     <p>You are not logged in.</p>
                     <p>
                         <x-icon icon="user" alt="login"></x-icon>
                         <router-link to="/auth/login/">Log in</router-link>
                     </p>
-                `}
+                `)}
                 <p>
                     <label>
                         <input type="checkbox" id="dark-theme-toggle" on-change="toggleDarkTheme" checked="${this.state.darkThemeEnabled}"> Use Dark Theme?

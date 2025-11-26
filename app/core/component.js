@@ -1,11 +1,23 @@
 /**
  * Component System
- * Web Components-based system with reactive state
+ * Web Components-based system with reactive state (using Preact VDOM)
  */
 
-import { reactive, createEffect } from './reactivity.js';
-import { patchHTML } from './vdom.js';
-import { html, getPropValue, getEventHandler } from './template.js';
+import { reactive, createEffect, trackAllDependencies } from './reactivity.js';
+import { render as preactRender } from '../vendor/preact/index.js';
+import { applyValues } from './template-compiler.js';
+import { html, getPropValue, getEventHandler, cleanupPropRegistry } from './template.js';
+
+// Global render counter for periodic cleanup
+let globalRenderCount = 0;
+
+// Debug logging control - only enable for specific components
+const DEBUG_COMPONENTS = new Set([
+    // Add component names here to debug them, e.g.:
+    // 'HOME-PAGE',
+    // 'X-TILES',
+    // 'USER-TOOLS'
+]);
 
 /**
  * Define a custom component
@@ -42,11 +54,13 @@ export function defineComponent(name, options) {
             this._modelListeners = [];
             this._modelEffects = [];
 
-            // Use shadow DOM only when styles are provided (for encapsulation)
-            // Or when explicitly requested with useShadowDOM: true
-            if (options.styles || options.useShadowDOM) {
-                this.attachShadow({ mode: 'open' });
-            }
+            // Template caching for performance
+            this._cachedTemplate = null;
+            this._lastStateSnapshot = null;
+
+            // Create a container div for Preact to render into
+            // This gives us a stable mount point for Preact's reconciliation
+            this._container = null;
         }
 
         connectedCallback() {
@@ -58,13 +72,22 @@ export function defineComponent(name, options) {
             // Parse attributes as props
             this._parseAttributes();
 
-            // Initial render
-            this.render();
+            // Apply any pending props from Preact ref callbacks that fired before mount
+            if (this._pendingProps) {
+                for (const [name, value] of Object.entries(this._pendingProps)) {
+                    // Set directly on props (not via setter) to avoid premature render
+                    this.props[name] = value;
+                }
+                delete this._pendingProps;
+            }
+
+            // Mark as mounted BEFORE initial render to prevent double-render
+            this._isMounted = true;
 
             // Setup reactivity - re-render on state changes
-            const effect = createEffect(() => {
-                // Always access state to track dependencies (even before mounted)
-                JSON.stringify(this.state);
+            const { dispose: disposeRenderEffect } = createEffect(() => {
+                // Track all state dependencies efficiently
+                trackAllDependencies(this.state);
 
                 // Only re-render if component is mounted
                 if (this._isMounted) {
@@ -72,12 +95,10 @@ export function defineComponent(name, options) {
                 }
             });
 
-            this._cleanups.push(() => {
-                // Cleanup would go here if needed
-            });
+            // Store disposal function for cleanup
+            this._cleanups.push(disposeRenderEffect);
 
             // Call mounted hook
-            this._isMounted = true;
             if (options.mounted) {
                 Promise.resolve().then(() => {
                     if (!this._isDestroyed) {
@@ -95,6 +116,9 @@ export function defineComponent(name, options) {
             if (options.unmounted) {
                 options.unmounted.call(this);
             }
+
+            // Unmount Preact tree
+            preactRender(null, this);
 
             // Run cleanup functions
             this._cleanups.forEach(fn => fn());
@@ -146,6 +170,10 @@ export function defineComponent(name, options) {
                         continue;
                     }
 
+                    // Check if property was already set (before connectedCallback)
+                    // Store it so we can restore after defining the property setter
+                    const existingValue = this.hasOwnProperty(propName) ? this[propName] : undefined;
+
                     const privateProp = `_${propName}`;
 
                     Object.defineProperty(this, propName, {
@@ -153,6 +181,10 @@ export function defineComponent(name, options) {
                             return this.props[propName];
                         },
                         set(value) {
+                            const isDebug = DEBUG_COMPONENTS.has(this.tagName);
+                            if (isDebug) {
+                                console.log(`[${this.tagName}] Prop "${propName}" changed:`, value);
+                            }
                             this.props[propName] = value;
                             // Re-parse and re-render
                             if (this._isMounted) {
@@ -162,6 +194,11 @@ export function defineComponent(name, options) {
                         enumerable: true,
                         configurable: true
                     });
+
+                    // Restore the pre-existing value if there was one
+                    if (existingValue !== undefined) {
+                        this.props[propName] = existingValue;
+                    }
                 }
             }
         }
@@ -170,6 +207,15 @@ export function defineComponent(name, options) {
             // Copy attribute values and direct properties to props
             if (options.props) {
                 for (const propName of Object.keys(options.props)) {
+                    // Check if property was set directly on element (before connectedCallback)
+                    // This happens when VDOM sets el[propName] = value before adding to DOM
+                    if (propName in this && this[propName] !== undefined && this[propName] !== options.props[propName]) {
+                        // Property was set, use it
+                        const value = this[propName];
+                        this.props[propName] = value;
+                        continue;
+                    }
+
                     // Check for attribute
                     const attrValue = this.getAttribute(propName);
                     if (attrValue !== null) {
@@ -198,32 +244,101 @@ export function defineComponent(name, options) {
         render() {
             if (!options.template) return;
 
-            // Clean up old event listeners
-            this._cleanupEventListeners();
+            const isDebug = DEBUG_COMPONENTS.has(this.tagName);
 
-            // Get template HTML
-            const templateHTML = options.template.call(this);
+            // Periodic cleanup of prop and event registries (every 100 renders)
+            globalRenderCount++;
+            if (globalRenderCount % 100 === 0) {
+                cleanupPropRegistry();
+            }
 
-            // Convert template to string (in case it's an html tag object)
-            const templateString = templateHTML && templateHTML.toString ? templateHTML.toString() : String(templateHTML || '');
+            // Inject styles into document head if not already done
+            if (options.styles && !this._stylesInjected) {
+                const styleId = `component-styles-${options.name || this.tagName}`;
+                if (!document.getElementById(styleId)) {
+                    const styleEl = document.createElement('style');
+                    styleEl.id = styleId;
 
-            // Get target (shadow root or element itself)
-            const target = this.shadowRoot || this;
+                    // Replace :host selector with component tag name
+                    let processedStyles = options.styles.replace(/:host/g, this.tagName.toLowerCase());
 
-            // Build full HTML
-            const fullHTML = `
-                ${options.styles ? `<style>${options.styles}</style>` : ''}
-                ${templateString}
-            `;
+                    // Wrap all rules with component tag name for scoping (basic CSS namespacing)
+                    // This prevents component styles from leaking globally
+                    // Split by } to get individual rules, then prefix each selector
+                    processedStyles = processedStyles
+                        .split('}')
+                        .map(rule => {
+                            if (!rule.trim()) return '';
+                            // Check if rule already starts with tag name
+                            const trimmed = rule.trim();
+                            if (trimmed.startsWith(this.tagName.toLowerCase())) {
+                                return rule + '}';
+                            }
+                            // Prefix selector with tag name
+                            const parts = rule.split('{');
+                            if (parts.length === 2) {
+                                const selector = parts[0].trim();
+                                const body = parts[1];
+                                // Split multiple selectors by comma
+                                const selectors = selector.split(',').map(s => {
+                                    s = s.trim();
+                                    // Don't prefix @-rules, *, or body/html selectors
+                                    if (s.startsWith('@') || s === '*' || s === 'body' || s === 'html') {
+                                        return s;
+                                    }
+                                    return `${this.tagName.toLowerCase()} ${s}`;
+                                }).join(', ');
+                                return `${selectors} { ${body}}`;
+                            }
+                            return rule + '}';
+                        })
+                        .join('\n');
 
-            // Use virtual DOM patching to efficiently update
-            patchHTML(target, fullHTML);
+                    styleEl.textContent = processedStyles;
+                    document.head.appendChild(styleEl);
+                }
+                this._stylesInjected = true;
+            }
 
-            // Bind event handlers (only binds new elements that have on-* attributes)
-            this._bindEvents(target);
+            // Call template function to get compiled tree
+            const templateResult = options.template.call(this);
 
-            // Setup two-way bindings (only binds new elements with x-model)
-            this._setupBindings(target);
+            // Convert compiled tree to Preact elements
+            if (templateResult && templateResult._compiled) {
+                if (isDebug) {
+                    console.log(`\n[${this.tagName}] Rendering with compiled template`);
+                    // Deep clone to avoid proxy issues when logging
+                    try {
+                        console.log(`[${this.tagName}] State:`, JSON.stringify(this.state, null, 2));
+                        console.log(`[${this.tagName}] Props:`, JSON.stringify(this.props, null, 2));
+                    } catch (e) {
+                        console.log(`[${this.tagName}] State (raw):`, this.state);
+                        console.log(`[${this.tagName}] Props (raw):`, this.props);
+                    }
+                }
+
+                // Apply values and convert to Preact VNode
+                const preactElement = applyValues(
+                    templateResult._compiled,
+                    templateResult._values || [],
+                    this
+                );
+
+                // Render using Preact's reconciliation
+                // Preact automatically maintains vdom state between renders
+                preactRender(preactElement, this);
+            } else {
+                // Fallback: String-based templates (for tests and legacy components)
+                const templateString = templateResult && templateResult.toString
+                    ? templateResult.toString()
+                    : String(templateResult || '');
+
+                // Simple innerHTML replacement for string templates
+                this.innerHTML = templateString;
+
+                // Bind events for string templates (Preact doesn't handle these)
+                this._bindEvents(this);
+            }
 
             // Call afterRender hook if provided
             if (options.afterRender && this._isMounted) {
@@ -244,30 +359,13 @@ export function defineComponent(name, options) {
         }
 
         _bindEvents(root) {
+            // Clean up old listeners first
+            this._cleanupEventListeners();
+
             // Find all elements with on-* attributes
-            // Only bind events on this component's own elements, not child components
             const allElements = root.querySelectorAll('*');
 
             allElements.forEach(el => {
-                // Skip elements that are inside other custom elements WITHOUT Shadow DOM
-                // (those components manage their own light DOM children)
-                // Elements inside custom elements WITH Shadow DOM are slotted content
-                // and should be bound by the parent component
-                let parent = el.parentElement;
-                while (parent && parent !== root) {
-                    if (parent.tagName && parent.tagName.includes('-')) {
-                        // Found a custom element parent
-                        // Skip only if it doesn't use Shadow DOM
-                        if (!parent.shadowRoot) {
-                            // Child manages its own light DOM children
-                            return;
-                        }
-                        // Has Shadow DOM, so this element is slotted content
-                        // Continue checking up the tree
-                    }
-                    parent = parent.parentElement;
-                }
-
                 // Check all attributes for on- prefix
                 Array.from(el.attributes).forEach(attr => {
                     if (attr.name.startsWith('on-')) {
@@ -279,9 +377,6 @@ export function defineComponent(name, options) {
                         const parts = fullAttrName.substring(3).split('-');
                         const eventName = parts[0];
                         const modifier = parts[1];
-
-                        // DON'T remove the attribute - we need it for re-renders
-                        // The cleanup phase will remove old listeners before re-binding
 
                         // Check if this is an event handler marker from template
                         const eventHandler = getEventHandler(attrValue);
@@ -304,7 +399,7 @@ export function defineComponent(name, options) {
                             else if (options.methods && this[attrValue]) {
                                 this[attrValue](e);
                             } else if (!eventHandler) {
-                                console.warn(`Method "${attrValue}" not found in component ${name}`);
+                                console.warn(`Method "${attrValue}" not found in component`);
                             }
                         };
 
@@ -325,7 +420,10 @@ export function defineComponent(name, options) {
             });
             this._modelListeners = [];
 
-            // Note: Effect cleanup would require extending createEffect with dispose mechanism
+            // Dispose old model effects
+            if (this._modelEffects) {
+                this._modelEffects.forEach(dispose => dispose());
+            }
             this._modelEffects = [];
 
             // Setup x-model bindings (two-way)
@@ -349,17 +447,14 @@ export function defineComponent(name, options) {
                 this._modelListeners.push({ element: el, listener });
 
                 // Update element when state changes
-                const effect = createEffect(() => {
+                const { dispose } = createEffect(() => {
                     if (el.value !== this.state[prop]) {
                         el.value = this.state[prop];
                     }
                 });
 
-                this._modelEffects.push(effect);
-
-                this._cleanups.push(() => {
-                    el.removeEventListener('input', listener);
-                });
+                // Store dispose function
+                this._modelEffects.push(dispose);
             });
         }
 

@@ -18,7 +18,8 @@ export default defineComponent('home-page', {
         // Load apps.json
         try {
             const response = await fetch('apps.json');
-            this.state.mainApps = await response.json();
+            const data = await response.json();
+            this.state.mainApps = data;
         } catch (error) {
             console.error('Failed to load apps.json:', error);
         }
@@ -26,7 +27,8 @@ export default defineComponent('home-page', {
         // Load private apps from API
         try {
             const api = await import('./api.js');
-            this.state.privateApps = await api.get_applications();
+            const apps = await api.get_applications();
+            this.state.privateApps = apps;
         } catch (error) {
             console.error('Failed to load private apps:', error);
         }
@@ -47,17 +49,17 @@ export default defineComponent('home-page', {
 
                 ${when(hasFeatured, html`
                     <h3>Featured</h3>
-                    <x-tiles id="featured-tiles"></x-tiles>
+                    <x-tiles id="featured-tiles" tiles="${this.state.mainApps.featured}"></x-tiles>
                 `)}
 
                 ${when(hasPrivate, html`
                     <h3>Private Applications</h3>
-                    <x-tiles id="private-tiles"></x-tiles>
+                    <x-tiles id="private-tiles" tiles="${this.state.privateApps}"></x-tiles>
                 `)}
 
                 ${when(hasOther, html`
                     <h3>Everything Else</h3>
-                    <x-tiles id="other-tiles"></x-tiles>
+                    <x-tiles id="other-tiles" tiles="${this.state.mainApps.other}"></x-tiles>
                 `)}
 
                 <user-tools></user-tools>
@@ -67,27 +69,5 @@ export default defineComponent('home-page', {
                 </div>
             </div>
         `;
-    },
-
-    // After render, set the props directly on the elements
-    afterRender() {
-        try {
-            const featuredTiles = this.querySelector('#featured-tiles');
-            if (featuredTiles) {
-                featuredTiles.tiles = this.state.mainApps.featured || [];
-            }
-
-            const privateTiles = this.querySelector('#private-tiles');
-            if (privateTiles) {
-                privateTiles.tiles = this.state.privateApps || [];
-            }
-
-            const otherTiles = this.querySelector('#other-tiles');
-            if (otherTiles) {
-                otherTiles.tiles = this.state.mainApps.other || [];
-            }
-        } catch (error) {
-            console.error('Error in home afterRender:', error);
-        }
     }
 });

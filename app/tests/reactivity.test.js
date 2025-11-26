@@ -3,7 +3,7 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { reactive, createEffect, computed, watch, isReactive } from '../core/reactivity.js';
+import { reactive, createEffect, computed, watch, isReactive, trackAllDependencies, memo } from '../core/reactivity.js';
 
 describe('Reactivity System', function(it) {
     it('creates reactive proxy', () => {
@@ -70,10 +70,12 @@ describe('Reactivity System', function(it) {
         const obj = reactive({ a: 1, b: 2 });
         const sum = computed(() => obj.a + obj.b);
 
-        assert.equal(sum(), 3, 'Computed should return correct initial value');
+        assert.equal(sum.get(), 3, 'Computed should return correct initial value');
 
         obj.a = 5;
-        assert.equal(sum(), 7, 'Computed should update when dependencies change');
+        assert.equal(sum.get(), 7, 'Computed should update when dependencies change');
+
+        sum.dispose(); // Cleanup
     });
 
     it('watches reactive values', () => {
@@ -124,5 +126,97 @@ describe('Reactivity System', function(it) {
         assert.equal(num, 5, 'Should handle numbers');
         assert.equal(str, 'hello', 'Should handle strings');
         assert.equal(bool, true, 'Should handle booleans');
+    });
+
+    it('disposes effects properly', () => {
+        const obj = reactive({ count: 0 });
+        let effectRuns = 0;
+
+        const { dispose } = createEffect(() => {
+            obj.count; // Track dependency
+            effectRuns++;
+        });
+
+        assert.equal(effectRuns, 1, 'Effect should run initially');
+
+        obj.count = 1;
+        assert.equal(effectRuns, 2, 'Effect should run after change');
+
+        dispose(); // Stop tracking
+
+        obj.count = 2;
+        assert.equal(effectRuns, 2, 'Effect should not run after disposal');
+    });
+
+    it('tracks all dependencies efficiently', () => {
+        const obj = reactive({
+            a: 1,
+            b: { c: 2 },
+            items: [1, 2, 3]
+        });
+        let tracked = 0;
+
+        createEffect(() => {
+            trackAllDependencies(obj);
+            tracked++;
+        });
+
+        assert.equal(tracked, 1, 'Should run initially');
+
+        obj.a = 5;
+        assert.equal(tracked, 2, 'Should track top-level changes');
+
+        obj.b.c = 10;
+        assert.equal(tracked, 3, 'Should track nested changes');
+
+        obj.items.push(4);
+        // Array push triggers twice: once for the mutation, once for length change
+        // This is expected behavior - both are valid reactivity triggers
+        assert.ok(tracked >= 4, 'Should track array changes (may trigger multiple times)');
+    });
+
+    it('memoizes function results', () => {
+        let computeCount = 0;
+        const expensiveCompute = memo(() => {
+            computeCount++;
+            return 42;
+        });
+
+        const result1 = expensiveCompute();
+        assert.equal(result1, 42, 'Should return correct value');
+        assert.equal(computeCount, 1, 'Should compute initially');
+
+        const result2 = expensiveCompute();
+        assert.equal(result2, 42, 'Should return same value');
+        assert.equal(computeCount, 1, 'Should not recompute if deps unchanged');
+    });
+
+    it('uses computed for reactive memoization', () => {
+        let computeCount = 0;
+
+        // For reactive dependencies, always use computed() not memo()
+        const obj = reactive({ value: 5 });
+
+        const doubledValue = computed(() => {
+            computeCount++;
+            return obj.value * 2;
+        });
+
+        const result1 = doubledValue.get();
+        assert.equal(result1, 10, 'Should compute initially');
+        assert.equal(computeCount, 1, 'Should run once');
+
+        // Access again without changing reactive value - uses cache
+        const result2 = doubledValue.get();
+        assert.equal(result2, 10, 'Should return cached value');
+        assert.equal(computeCount, 1, 'Should not recompute');
+
+        // Change reactive value - invalidates cache
+        obj.value = 10;
+        const result3 = doubledValue.get();
+        assert.equal(result3, 20, 'Should recompute with new value');
+        assert.equal(computeCount, 2, 'Should have recomputed');
+
+        doubledValue.dispose();
     });
 });

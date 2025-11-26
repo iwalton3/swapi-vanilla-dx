@@ -58,7 +58,7 @@ export default defineComponent('remote-button', {
         }
 
         button:disabled {
-            opacity: 0.3 !important;
+            opacity: 0.3;
             cursor: not-allowed;
         }
     `,

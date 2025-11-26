@@ -3,7 +3,7 @@
  * Simple reactive stores with subscription support
  */
 
-import { reactive, createEffect } from './reactivity.js';
+import { reactive, createEffect, trackAllDependencies } from './reactivity.js';
 
 /**
  * Create a writable store with reactive state
@@ -29,8 +29,8 @@ export function createStore(initial) {
     createEffect(() => {
         effectRunCount++;
 
-        // Access all properties to track them
-        JSON.stringify(state);
+        // Track all state dependencies efficiently
+        trackAllDependencies(state);
 
         // Don't notify on first run, always notify after that
         if (effectRunCount > 1) {
@@ -66,6 +66,8 @@ export function createStore(initial) {
          */
         set(newState) {
             Object.assign(state, newState);
+            // Manually trigger subscribers since Object.assign doesn't always trigger reactivity
+            notifySubscribers();
         },
 
         /**
@@ -75,6 +77,8 @@ export function createStore(initial) {
             const newState = updater(state);
             if (newState) {
                 Object.assign(state, newState);
+                // Manually trigger subscribers since Object.assign doesn't always trigger reactivity
+                notifySubscribers();
             }
         }
     };

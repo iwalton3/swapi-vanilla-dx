@@ -12,10 +12,11 @@ The `/app/` directory contains a completely custom web framework built from scra
 
 ### Framework Architecture
 
-- **Zero dependencies** - Pure vanilla JavaScript, no npm packages
+- **Zero npm dependencies** - Pure vanilla JavaScript, vendored Preact, no npm packages
 - **Reactive state management** - Vue 3-style proxy-based reactivity
 - **Web Components** - Built on native Custom Elements API
-- **Virtual DOM** - Efficient DOM patching with element preservation
+- **Preact rendering** - Vendored Preact (~4KB) for efficient DOM reconciliation
+- **Template compilation** - Innovative compile-once system: `html`` → compile → Preact VNode → render`
 - **Router** - Hash-based and HTML5 routing with capability checks
 - **Stores** - Reactive stores with localStorage persistence
 - **Template system** - Tagged template literals with helpers (`html`, `when`, `each`, `raw`)
@@ -24,30 +25,33 @@ The `/app/` directory contains a completely custom web framework built from scra
 
 ```
 app/
-├── core/               # Framework core
-│   ├── component.js    # Component definition system
-│   ├── reactivity.js   # Reactive proxy system
-│   ├── vdom.js         # Virtual DOM implementation
-│   ├── router.js       # Routing system
-│   ├── store.js        # State management
-│   ├── template.js     # Template helpers
-│   ├── utils.js        # Utility functions (notify, darkTheme, etc.)
-│   ├── app-header.js   # App header component
-│   └── x-page.js       # Page wrapper component
-├── components/         # Reusable UI components
+├── core/                    # Framework core (~3000 lines)
+│   ├── component.js         # Component definition system
+│   ├── reactivity.js        # Reactive proxy system
+│   ├── template.js          # Template helpers (html, when, each, raw)
+│   ├── template-compiler.js # Template → Preact VNode compiler
+│   ├── router.js            # Routing system
+│   ├── store.js             # State management
+│   ├── utils.js             # Utility functions (notify, darkTheme, etc.)
+│   ├── app-header.js        # App header component
+│   └── x-page.js            # Page wrapper component
+├── vendor/
+│   └── preact/              # Vendored Preact 10.x (~4KB, no npm!)
+├── components/              # Reusable UI components
 │   ├── icon.js
 │   ├── select-box.js
 │   ├── lazy-select-box.js
 │   ├── tiles.js
 │   └── notification-list.js
-├── auth/              # Authentication system
-├── apps/              # Application modules (pwgen, etc.)
-├── hremote-app/       # Home remote control
-├── locationtool-app/  # Location tracking
-├── hometool-app/      # Home automation
-├── styles/            # Global CSS
+├── auth/                    # Authentication system
+├── apps/                    # Application modules (pwgen, etc.)
+├── hremote-app/             # Home remote control
+├── locationtool-app/        # Location tracking
+├── hometool-app/            # Home automation
+├── playground/              # Interactive framework demos
+├── styles/                  # Global CSS
 │   └── global.css
-└── tests/             # Comprehensive unit tests
+└── tests/                   # Comprehensive unit tests (125 tests)
 ```
 
 ## Component Development
@@ -79,8 +83,10 @@ export default defineComponent('my-component', {
     },
 
     // Lifecycle: called after each render
+    // ⚠️ Often unnecessary with Preact - use only when needed for DOM manipulation
     afterRender() {
-        // Sync input values, set up non-reactive DOM state
+        // Use only for: imperative DOM APIs, third-party library integration
+        // NOT for: syncing values (Preact handles this), event binding (use on-*)
     },
 
     // Lifecycle: called before component is removed
@@ -111,85 +117,43 @@ export default defineComponent('my-component', {
         `;
     },
 
-    // Scoped styles (Shadow DOM is used by default)
+    // Scoped styles (using component tag name prefix)
     styles: `
         .container {
             padding: 20px;
         }
 
-        /* Use CSS variables for theming (penetrates Shadow DOM) */
-        .container {
-            background-color: var(--input-bg, white);
-            color: var(--input-text, #000);
+        /* Styles are automatically scoped to component tag name */
+        button {
+            background: #007bff;
+            color: white;
         }
     `
 });
-
-// If you need light DOM (rare), explicitly disable Shadow DOM:
-export default defineComponent('light-dom-component', {
-    useShadowDOM: false,  // Opt out of Shadow DOM
-    template() {
-        return html`<div>I use light DOM</div>`;
-    }
-});
 ```
 
-## Shadow DOM Architecture
+## Rendering Architecture: Preact Integration
 
-**IMPORTANT**: All components use Shadow DOM by default for proper encapsulation and to prevent parent VDOM operations from accidentally removing component internals.
+**How it works:**
 
-### Why Shadow DOM is Default
-
-Without Shadow DOM, a component's rendered elements live in the light DOM where:
-- ❌ Parent VDOM diffing can accidentally remove them
-- ❌ CSS from the page can leak in and break styling
-- ❌ Component internals are exposed and fragile
-
-With Shadow DOM (default):
-- ✅ Component internals are protected from parent VDOM
-- ✅ Styles are scoped and don't leak
-- ✅ Components are self-contained and robust
-
-### Theming Across Shadow DOM
-
-Use **CSS custom properties (variables)** which penetrate Shadow DOM boundaries:
+1. **Template Compilation** - `html`` templates are compiled once to an AST structure
+2. **Value Application** - On each render, values are applied to create Preact VNodes
+3. **Preact Reconciliation** - Preact efficiently updates the real DOM
 
 ```javascript
-// In component styles
-styles: `
-    select {
-        background-color: var(--input-bg, white);
-        border: 1px solid var(--input-border, #ddd);
-        color: var(--input-text, #000);
-    }
-`
+// Template compiled once when first rendered ✓
+const template = html`<div>${this.state.count}</div>`;
 
-// In global.css
-body {
-    --input-bg: white;
-    --input-border: #ddd;
-    --input-text: #000;
-}
-
-body.dark {
-    --input-bg: #353535;
-    --input-border: #555;
-    --input-text: #ccc;
-}
+// On re-render: apply new values → Preact VNode → Preact reconciles DOM
 ```
 
-### Light DOM (Rare Cases)
+**Why Preact?**
+- **Battle-tested** - Used in production by thousands of sites
+- **Tiny** - Only ~4KB gzipped, vendored (no npm needed)
+- **Efficient** - Highly optimized reconciliation algorithm
+- **Zero build** - No JSX transform, no bundler
 
-Only disable Shadow DOM if you specifically need light DOM (e.g., for SEO or form participation):
-
-```javascript
-export default defineComponent('my-component', {
-    useShadowDOM: false,  // Opt out - use with caution!
-    template() {
-        return html`<div>Light DOM content</div>`;
-    }
-});
-```
+The innovative part is the **template compilation system** that converts `html`` templates to Preact VNodes efficiently without JSX or a build step.
 
 ## Event Binding - CRITICAL
 
@@ -333,6 +297,232 @@ Only use for trusted, sanitized content:
 ${raw(this.state.trustedHtmlContent)}
 ```
 
+## Two-Way Data Binding with `x-model`
+
+**`x-model` provides automatic two-way data binding for form inputs** - a feature that even React doesn't have! It automatically handles value binding and change events based on the input type.
+
+### Basic Usage
+
+Simply add `x-model="propertyName"` to any input element:
+
+```javascript
+data() {
+    return {
+        username: '',
+        age: 0,
+        agreed: false
+    };
+},
+
+template() {
+    return html`
+        <input type="text" x-model="username">
+        <input type="number" x-model="age">
+        <input type="checkbox" x-model="agreed">
+    `;
+}
+```
+
+That's it! The framework automatically:
+- Binds the correct attribute (`value` or `checked`)
+- Sets up the correct event listener (`input` or `change`)
+- Updates `this.state.propertyName` when the input changes
+- Re-renders when state changes
+
+### Supported Input Types
+
+#### Text Inputs (text, email, password, url, etc.)
+```javascript
+<input type="text" x-model="name">
+<input type="email" x-model="email">
+<textarea x-model="message"></textarea>
+```
+- Binds to `value` attribute
+- Listens to `input` event
+- Stores as string
+
+#### Number and Range Inputs
+```javascript
+<input type="number" x-model="count" min="1" max="100">
+<input type="range" x-model="volume" min="0" max="10">
+```
+- Binds to `value` attribute
+- Listens to `input` event
+- **Automatically converts to number** using `valueAsNumber`
+- Falls back to string if value is invalid
+
+#### Checkboxes
+```javascript
+<input type="checkbox" x-model="agreed">
+<input type="checkbox" x-model="receiveNewsletter">
+```
+- Binds to `checked` attribute
+- Listens to `change` event
+- Stores as boolean (`true`/`false`)
+
+#### Radio Buttons
+```javascript
+<input type="radio" name="size" value="small" x-model="selectedSize">
+<input type="radio" name="size" value="medium" x-model="selectedSize">
+<input type="radio" name="size" value="large" x-model="selectedSize">
+```
+- Binds to `checked` attribute
+- Listens to `change` event
+- Stores the `value` of the selected radio button
+- All radios should use the same state property
+
+#### Select Dropdowns
+```javascript
+<select x-model="country">
+    <option value="us">United States</option>
+    <option value="uk">United Kingdom</option>
+    <option value="ca">Canada</option>
+</select>
+```
+- Binds to `value` attribute
+- Listens to `input` event
+- Stores selected option's value
+
+#### File Inputs
+```javascript
+<input type="file" x-model="uploadedFiles">
+<input type="file" multiple x-model="uploadedFiles">
+```
+- No value binding (can't set file input values)
+- Listens to `change` event
+- Stores `FileList` object in state
+- Access files with `this.state.uploadedFiles[0]`, etc.
+
+### Complete Example
+
+```javascript
+export default defineComponent('registration-form', {
+    data() {
+        return {
+            username: '',
+            email: '',
+            age: 18,
+            country: 'us',
+            newsletter: false,
+            plan: 'free',
+            bio: ''
+        };
+    },
+
+    methods: {
+        async handleSubmit(e) {
+            e.preventDefault();
+
+            console.log('Form data:', {
+                username: this.state.username,
+                email: this.state.email,
+                age: this.state.age,          // Already a number!
+                country: this.state.country,
+                newsletter: this.state.newsletter,  // Already a boolean!
+                plan: this.state.plan,
+                bio: this.state.bio
+            });
+
+            // All values are ready to send - no parsing needed!
+            await api.register(this.state);
+        }
+    },
+
+    template() {
+        return html`
+            <form on-submit-prevent="handleSubmit">
+                <div>
+                    <label>Username: <input type="text" x-model="username"></label>
+                </div>
+
+                <div>
+                    <label>Email: <input type="email" x-model="email"></label>
+                </div>
+
+                <div>
+                    <label>Age: <input type="number" x-model="age" min="13" max="120"></label>
+                </div>
+
+                <div>
+                    <label>Country:
+                        <select x-model="country">
+                            <option value="us">United States</option>
+                            <option value="uk">United Kingdom</option>
+                            <option value="ca">Canada</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div>
+                    <label>
+                        <input type="checkbox" x-model="newsletter">
+                        Subscribe to newsletter
+                    </label>
+                </div>
+
+                <div>
+                    <label>Plan:</label>
+                    <label><input type="radio" name="plan" value="free" x-model="plan"> Free</label>
+                    <label><input type="radio" name="plan" value="pro" x-model="plan"> Pro</label>
+                    <label><input type="radio" name="plan" value="enterprise" x-model="plan"> Enterprise</label>
+                </div>
+
+                <div>
+                    <label>Bio: <textarea x-model="bio"></textarea></label>
+                </div>
+
+                <button type="submit">Register</button>
+            </form>
+        `;
+    }
+});
+```
+
+### x-model vs Manual Binding
+
+**Without x-model** (verbose):
+```javascript
+<input
+    type="text"
+    value="${this.state.username}"
+    on-input="${(e) => { this.state.username = e.target.value; }}">
+```
+
+**With x-model** (concise):
+```javascript
+<input type="text" x-model="username">
+```
+
+### Benefits
+
+1. **Concise**: One attribute instead of two
+2. **Type-safe**: Automatic type conversion for numbers
+3. **Smart**: Uses correct attribute and event for each input type
+4. **Less error-prone**: No need to remember `value` vs `checked`, `input` vs `change`
+5. **Better DX**: Feels like Vue/Svelte but works without a build step
+
+### When NOT to Use x-model
+
+Use manual binding if you need:
+- **Value transformation**: `on-input="${(e) => { this.state.price = parseFloat(e.target.value) * 1.1; }}"`
+- **Validation**: Check value before updating state
+- **Debouncing**: Delay state updates
+- **Custom logic**: Any processing beyond simple assignment
+
+```javascript
+// Manual binding for custom logic
+<input
+    type="text"
+    value="${this.state.search}"
+    on-input="${(e) => {
+        const value = e.target.value.trim().toLowerCase();
+        if (value.length >= 3) {
+            this.state.search = value;
+            this.performSearch();
+        }
+    }}">
+```
+
 ## State Management
 
 ### Reactive State
@@ -352,6 +542,32 @@ methods: {
     }
 }
 ```
+
+### ⚠️ CRITICAL: Array Mutations and Infinite Loops
+
+**NEVER mutate reactive arrays with methods like `.sort()`** - This causes infinite re-render loops!
+
+```javascript
+// ✅ CORRECT - Create a copy before sorting
+getSortedItems() {
+    return [...this.state.items].sort((a, b) => a.time - b.time);
+}
+
+// ❌ WRONG - Mutates reactive array, triggers re-render loop!
+getSortedItems() {
+    return this.state.items.sort((a, b) => a.time - b.time);  // INFINITE LOOP!
+}
+```
+
+**Why?** When you call `.sort()` on a reactive array during rendering:
+1. Sort mutates the array
+2. Mutation triggers reactivity
+3. Reactivity triggers re-render
+4. Re-render calls your method again
+5. Loop repeats forever → Stack overflow
+
+**Safe methods** (return new arrays): `.filter()`, `.map()`, `.slice()`
+**Unsafe methods** (mutate in place): `.sort()`, `.reverse()`, `.splice()`
 
 ### ⚠️ CRITICAL: Sets and Maps
 
@@ -414,13 +630,26 @@ methods: {
 
         await this.saveData();
     }
+}
+
+// ✅ No afterRender() needed! Preact handles value syncing automatically
+```
+
+**For select dropdowns**, use `value` attribute and let Preact handle syncing:
+
+```javascript
+template() {
+    return html`
+        <select on-change="handleChange" value="${this.state.selected}">
+            <option value="opt1">Option 1</option>
+            <option value="opt2">Option 2</option>
+        </select>
+    `;
 },
 
-afterRender() {
-    // Sync input value if needed
-    const input = this.querySelector('#username');
-    if (input) {
-        input.value = this.state.username;
+methods: {
+    handleChange(e) {
+        this.state.selected = e.target.value;
     }
 }
 ```
@@ -521,27 +750,40 @@ async mounted() {
 }
 ```
 
-### Select Boxes
+### Select Boxes with Custom Components
 
-For dynamic options, sync in `afterRender`:
+Use inline event handlers - no afterRender() needed:
 
 ```javascript
 template() {
     return html`
         <x-select-box
-            id="my-select"
             value="${this.state.selected}"
-            options="${JSON.stringify(this.state.options)}">
+            options="${this.state.options}"
+            on-change="${(e) => { this.state.selected = e.detail.value; }}">
         </x-select-box>
+    `;
+}
+
+// ✅ No afterRender() needed!
+```
+
+**For native select elements**, use value attribute and on-change:
+
+```javascript
+template() {
+    return html`
+        <select on-change="handleChange" value="${this.state.selected}">
+            ${each(this.state.options, opt => html`
+                <option value="${opt}">${opt}</option>
+            `)}
+        </select>
     `;
 },
 
-afterRender() {
-    const select = this.querySelector('#my-select');
-    if (select) {
-        select.addEventListener('change', (e) => {
-            this.state.selected = e.detail.value;
-        });
+methods: {
+    handleChange(e) {
+        this.state.selected = e.target.value;
     }
 }
 ```
@@ -555,7 +797,8 @@ The framework has built-in security protections with defense-in-depth:
 1. **Symbol-based trust markers**: The framework uses non-exported Symbols for `html` and `raw` markers, preventing JSON injection attacks
 2. **Crypto-random prop IDs**: Object/array props use unpredictable IDs to prevent reference tampering
 3. **Context-aware escaping**: Automatic XSS protection based on interpolation context
-4. **Attribute sanitization**: URL validation, boolean attribute handling, and dangerous attribute blocking
+4. **toString() attack prevention**: Uses `Object.prototype.toString.call()` to prevent malicious custom toString() methods from executing
+5. **Attribute sanitization**: URL validation, boolean attribute handling, and dangerous attribute blocking
 
 ### 1. XSS Protection
 
@@ -908,16 +1151,19 @@ export default defineComponent('user-profile', {
 
 ## Key Conventions
 
-1. **Use `on-*` for ALL event binding** - Never use inline handlers or addEventListener
-2. **Use `when()` and `each()`** - Not ternaries or manual loops
-3. **Call store methods on `.state`** - `login.state.logoff()`, not `login.logoff()`
-4. **Reassign Sets/Maps** - They're not reactive otherwise
-5. **Clean up in `unmounted()`** - Unsubscribe from stores, clear timers
-6. **Validate user input** - Always validate before API calls
-7. **Handle errors properly** - Don't let errors fail silently
-8. **Use descriptive names** - No abbreviations or single letters
-9. **Add JSDoc comments** - Document component purpose, props, and events
-10. **Use constants** - No magic numbers or strings
+1. **Use `x-model` for form inputs** - One attribute for two-way binding instead of value + on-input
+2. **Use `on-*` for ALL event binding** - Never use inline handlers or addEventListener
+3. **Use `when()` and `each()`** - Not ternaries or manual loops
+4. **Never mutate reactive arrays** - Use `[...array].sort()`, not `array.sort()` (prevents infinite loops)
+5. **Call store methods on `.state`** - `login.state.logoff()`, not `login.logoff()`
+6. **Reassign Sets/Maps** - They're not reactive otherwise
+7. **Avoid `afterRender()` anti-patterns** - Don't use for value syncing or event binding (Preact handles this)
+8. **Clean up in `unmounted()`** - Unsubscribe from stores, clear timers
+9. **Validate user input** - Always validate before API calls
+10. **Handle errors properly** - Don't let errors fail silently
+11. **Use descriptive names** - No abbreviations or single letters
+12. **Add JSDoc comments** - Document component purpose, props, and events
+13. **Use constants** - No magic numbers or strings
 
 ## Getting Help
 

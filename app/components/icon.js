@@ -11,9 +11,19 @@ export default defineComponent('x-icon', {
     },
 
     template() {
+        // Map severity names to actual icon file names
+        const iconMap = {
+            'success': 'info',  // Use info icon for success (no dedicated success icon)
+            'warning': 'warn',  // Map warning to warn.png
+            'info': 'info',
+            'error': 'error'
+        };
+
+        const iconName = iconMap[this.props.icon] || this.props.icon;
+
         return html`
-            <img src="${`icons-sm/${this.props.icon}.png`}"
-                 srcset="${`icons-sm/${this.props.icon}2x.png 2x`}"
+            <img src="${`icons-sm/${iconName}.png`}"
+                 srcset="${`icons-sm/${iconName}2x.png 2x`}"
                  alt="${this.props.alt}">
         `;
     }

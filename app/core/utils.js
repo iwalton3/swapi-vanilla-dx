@@ -5,8 +5,7 @@
 
 import { createStore } from './store.js';
 
-// Re-export memo for convenience
-export { memo } from './vdom.js';
+// memo is now in reactivity.js (old vdom.js version no longer used)
 
 /**
  * Sleep/delay utility

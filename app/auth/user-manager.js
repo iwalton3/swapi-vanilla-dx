@@ -104,7 +104,7 @@ export default defineComponent('user-manager', {
                                         </x-lazy-select-box>
                                     </td>
                                 </tr>
-                            `)}
+                            `, user => user.username)}
                         </tbody>
                     </table>
                 </div>

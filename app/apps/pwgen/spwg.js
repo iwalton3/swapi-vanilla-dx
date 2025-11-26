@@ -40,7 +40,7 @@ defineComponent('spwg-page', {
                 <div class="section">
                     <form on-submit-prevent="fromBits">
                         <label>
-                            <input class="sm" id="entropy-input" value="${this.state.entropy}" type="number" min="1" max="1000">
+                            <input class="sm" x-model="entropy" type="number" min="1" max="1000">
                             bits of entropy.
                         </label>
                         <input type="submit" value="Generate">
@@ -49,7 +49,7 @@ defineComponent('spwg-page', {
                     <!-- Words input -->
                     <form on-submit-prevent="fromWords">
                         <label>
-                            <input class="sm" id="words-input" value="${this.state.words}" type="number" min="1" max="20">
+                            <input class="sm" x-model="words" type="number" min="1" max="20">
                             words.
                         </label>
                         <input type="submit" value="Generate">
@@ -58,7 +58,7 @@ defineComponent('spwg-page', {
                     <!-- Combinations input -->
                     <form on-submit-prevent="fromMax">
                         <label>
-                            <input id="combinations-input" value="${this.state.combinations}" type="number" min="1">
+                            <input x-model="combinations" type="number" min="1">
                             possible combinations.
                         </label>
                         <input type="submit" value="Generate">
@@ -72,7 +72,7 @@ defineComponent('spwg-page', {
                     <form on-submit-prevent="toWordsSubmit">
                         <label>
                             Convert the number
-                            <input id="number-input" value="${this.state.number}" type="number" style="width: 200px;">
+                            <input x-model="number" type="number" style="width: 200px;">
                             to a password.
                         </label>
                         <input type="submit" value="Convert">
@@ -81,7 +81,7 @@ defineComponent('spwg-page', {
                     <form on-submit-prevent="fromPassword">
                         <label>
                             Convert the password
-                            <input id="password-input" value="${this.state.password}" type="text" style="width: 200px;">
+                            <input x-model="password" type="text" style="width: 200px;">
                             to a number.
                         </label>
                         <input type="submit" value="Convert">
@@ -94,8 +94,8 @@ defineComponent('spwg-page', {
 
                     <form on-submit-prevent="batchGenerate">
                         <label>
-                            Generate <input class="sm" id="count-input" value="${this.state.count}" type="number" min="1" max="100"> passwords
-                            with <input class="sm" id="words-batch-input" value="${this.state.words}" type="number" min="1" max="20"> words.
+                            Generate <input class="sm" x-model="count" type="number" min="1" max="100"> passwords
+                            with <input class="sm" x-model="words" type="number" min="1" max="20"> words.
                         </label>
                         <input type="submit" value="Generate Batch">
                     </form>
@@ -107,9 +107,6 @@ defineComponent('spwg-page', {
     methods: {
         async fromBits() {
             try {
-                const entropyInput = this.querySelector('#entropy-input');
-                if (entropyInput) this.state.entropy = entropyInput.value;
-
                 this.state.response = await frombits(this.state.entropy);
             } catch (error) {
                 this.state.response = '<p class="error">Error generating password from bits.</p>';
@@ -118,9 +115,6 @@ defineComponent('spwg-page', {
 
         async fromWords() {
             try {
-                const wordsInput = this.querySelector('#words-input');
-                if (wordsInput) this.state.words = parseInt(wordsInput.value);
-
                 this.state.response = await fromlength(this.state.words);
             } catch (error) {
                 this.state.response = '<p class="error">Error generating password from word count.</p>';
@@ -129,9 +123,6 @@ defineComponent('spwg-page', {
 
         async fromMax() {
             try {
-                const combinationsInput = this.querySelector('#combinations-input');
-                if (combinationsInput) this.state.combinations = combinationsInput.value;
-
                 this.state.response = await frommax(this.state.combinations);
             } catch (error) {
                 this.state.response = '<p class="error">Error generating password from combinations.</p>';
@@ -140,9 +131,6 @@ defineComponent('spwg-page', {
 
         async toWordsSubmit() {
             try {
-                const numberInput = this.querySelector('#number-input');
-                if (numberInput) this.state.number = numberInput.value;
-
                 this.state.response = await towords(this.state.number);
             } catch (error) {
                 this.state.response = '<p class="error">Error converting number to words.</p>';
@@ -151,9 +139,6 @@ defineComponent('spwg-page', {
 
         async fromPassword() {
             try {
-                const passwordInput = this.querySelector('#password-input');
-                if (passwordInput) this.state.password = passwordInput.value;
-
                 this.state.response = await tonumber(this.state.password);
             } catch (error) {
                 this.state.response = '<p class="error">That password cannot be converted to a number.</p>';
@@ -162,11 +147,6 @@ defineComponent('spwg-page', {
 
         async batchGenerate() {
             try {
-                const countInput = this.querySelector('#count-input');
-                const wordsBatchInput = this.querySelector('#words-batch-input');
-                if (countInput) this.state.count = parseInt(countInput.value);
-                if (wordsBatchInput) this.state.words = parseInt(wordsBatchInput.value);
-
                 this.state.response = await fromlengthbatch(this.state.words, this.state.count);
             } catch (error) {
                 this.state.response = '<p class="error">Error generating batch passwords.</p>';
@@ -186,7 +166,7 @@ defineComponent('spwg-page', {
         }
 
         .sm {
-            width: 3em;
+            width: 4em;  /* Increased from 3em to fix number overlap in dark mode */
         }
 
         h3 {

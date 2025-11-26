@@ -45,11 +45,10 @@ export default defineComponent('x-select-box', {
         const valueStr = String(this.props.value);
 
         return html`
-            <select on-change="handleChange">
+            <select on-change="handleChange" value="${this.props.value}">
                 ${each(optionsList, option => {
                     const optionStr = String(option);
-                    const selected = optionStr === valueStr ? true : undefined;
-                    return html`<option value="${optionStr}" selected="${selected}">${option}</option>`;
+                    return html`<option value="${optionStr}">${option}</option>`;
                 })}
             </select>
         `;
@@ -62,7 +61,7 @@ export default defineComponent('x-select-box', {
             padding: 8px;
             border-radius: 4px;
 
-            /* Use CSS variables that penetrate Shadow DOM */
+            /* Use CSS variables for theming */
             background-color: var(--input-bg, white);
             border: 1px solid var(--input-border, #ddd);
             color: var(--input-text, #000);

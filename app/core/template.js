@@ -3,6 +3,8 @@
  * Provides XSS protection by automatically detecting interpolation context
  */
 
+import * as templateCompiler from './template-compiler.js';
+
 // Security: Use Symbols to prevent spoofing of trusted content markers
 // Symbols are private - only helper functions are exported
 const HTML_MARKER = Symbol('html');
@@ -155,7 +157,7 @@ export function escapeUrl(url) {
 /**
  * Sanitize URL - blocks dangerous schemes
  */
-function sanitizeUrl(url) {
+export function sanitizeUrl(url) {
     const normalized = normalizeInput(url);
 
     // Remove all whitespace (including Unicode whitespace)
@@ -252,12 +254,44 @@ function detectContext(precedingString) {
     return { type: 'attribute', tagName, attrName };
 }
 
+// Feature flag for compiled templates (set to true to enable experimental compiler)
+export const USE_COMPILED_TEMPLATES = true;
+
 /**
  * Tagged template literal with automatic context-aware escaping
+ *
+ * Can use compiled templates for performance (when USE_COMPILED_TEMPLATES = true):
+ * - Parses template once and caches
+ * - Creates structured tree
+ * - Fills slots on each render
+ * - No regex parsing on render!
  *
  * Returns a special object that can be nested without double-escaping
  */
 export function html(strings, ...values) {
+    // Compiled template path (experimental)
+    if (USE_COMPILED_TEMPLATES && html._useCompiled) {
+        try {
+            const { compileTemplate } = html._compiler;
+            const compiled = compileTemplate(strings);
+
+            return {
+                [HTML_MARKER]: true,
+                _compiled: compiled,
+                _values: values,
+                toString() {
+                    // Compiled templates are rendered via Preact, not strings
+                    // This is only for backward compat with legacy code
+                    return '<!-- compiled template -->';
+                }
+            };
+        } catch (error) {
+            console.warn('[html] Compiled template failed, falling back to string-based:', error);
+            // Fall through to string-based
+        }
+    }
+
+    // String-based implementation (current default)
     let result = '';
 
     strings.forEach((string, i) => {
@@ -464,13 +498,42 @@ export function cleanupPropRegistry() {
 
 /**
  * Conditional rendering helper
- * Returns the result if condition is truthy, otherwise returns empty string or else clause
+ * Returns thenValue if condition is truthy, otherwise returns elseValue (default: null)
+ * Preact handles null children natively, no keys needed
+ * @param {boolean} condition - Condition to evaluate
+ * @param {*} thenValue - Value to return if condition is true
+ * @param {*} elseValue - Value to return if condition is false (default: null)
  */
-export function when(condition, thenValue, elseValue = '') {
+export function when(condition, thenValue, elseValue = null) {
     const result = condition ? thenValue : elseValue;
+
+    // Preact handles null/false natively - just return it
+    if (!result) {
+        if (USE_COMPILED_TEMPLATES) {
+            // Return null wrapped in compiled structure
+            return {
+                [HTML_MARKER]: true,
+                _compiled: null,  // Preact handles null children
+                toString() {
+                    return '';
+                }
+            };
+        }
+        return raw('');
+    }
 
     // Handle html template objects (check Symbol for security)
     if (isHtml(result)) {
+        // Mark as wrapped so applyValues doesn't convert to HTML string
+        if (result._compiled) {
+            return {
+                ...result,
+                _compiled: {
+                    ...result._compiled,
+                    wrapped: true
+                }
+            };
+        }
         return result;
     }
 
@@ -484,17 +547,109 @@ export function when(condition, thenValue, elseValue = '') {
 }
 
 /**
- * Loop rendering helper
- * Maps array items to templates and returns safe concatenated HTML
+ * Loop rendering helper with optional key support
+ * Maps array items to templates and returns safe concatenated HTML or compiled fragment
+ * @param {Array} array - Array to iterate over
+ * @param {Function} mapFn - Function to map each item to a template
+ * @param {Function} [keyFn] - Optional function to extract unique key from each item (e.g., item => item.id)
  */
-export function each(array, mapFn) {
+export function each(array, mapFn, keyFn = null) {
     if (!array || !Array.isArray(array)) {
+        // Return empty fragment (not raw HTML) to maintain consistent type
+        if (USE_COMPILED_TEMPLATES) {
+            return {
+                [HTML_MARKER]: true,
+                _compiled: {
+                    type: 'fragment',
+                    wrapped: false,
+                    children: []
+                },
+                toString() {
+                    return '';
+                }
+            };
+        }
         return raw('');
     }
 
-    const results = array.map(mapFn);
+    const results = array.map((item, index) => {
+        const result = mapFn(item, index);
 
-    // Join all html objects together (check Symbol for security)
+        // If keyFn provided and result has compiled template, add key to the node
+        if (keyFn && result && result._compiled) {
+            const key = keyFn(item);
+            // Attach key to the compiled node
+            return {
+                ...result,
+                _compiled: {
+                    ...result._compiled,
+                    key: key
+                }
+            };
+        }
+
+        return result;
+    });
+
+    // Check if results contain compiled templates
+    const hasCompiled = results.some(r => r && r._compiled);
+
+    // Always use compiled templates if enabled (even for empty arrays to maintain consistent type)
+    if (USE_COMPILED_TEMPLATES && (hasCompiled || results.length === 0)) {
+        // Extract compiled trees from results, keeping track of original item index
+        // IMPORTANT: Also preserve _values from nested templates
+        const compiledChildren = results
+            .map((r, itemIndex) => {
+                if (!r || !r._compiled) return null;
+
+                const child = r._compiled;
+                const childValues = r._values;  // Preserve values from nested template
+
+                // Skip whitespace-only text nodes
+                if (child.type === 'text' && child.value && /^\s*$/.test(child.value)) {
+                    return null;
+                }
+
+                // If unwrapped fragment with single element child, unwrap and move key to element
+                // This is needed for Preact's keyed reconciliation (keys must be on elements, not fragments)
+                if (child.type === 'fragment' && !child.wrapped && child.children.length === 1 && child.children[0].type === 'element') {
+                    const element = child.children[0];
+                    const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
+                    return {...element, key, _itemValues: childValues};
+                }
+
+                // For multi-child fragments or other nodes, keep as-is
+                // Set key for Preact reconciliation
+                const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
+                return {...child, key, _itemValues: childValues};
+            })
+            .filter(Boolean);
+
+        // Minimal logging - uncomment for debugging
+        // console.log('[each]', compiledChildren.length, 'items');
+
+        // For compiled templates, return a fragment containing all compiled nodes
+        return {
+            [HTML_MARKER]: true,
+            _compiled: {
+                type: 'fragment',
+                wrapped: false,  // Unwrapped fragments spread their children into parent
+                fromEach: true,   // Mark as from each() to distinguish from nested html() templates
+                children: compiledChildren
+            },
+            toString() {
+                // Fallback for string-based rendering
+                return results.map(r => {
+                    if (isHtml(r)) {
+                        return r.toString();
+                    }
+                    return escapeHtml(r);
+                }).join('');
+            }
+        };
+    }
+
+    // String-based path (legacy)
     const joined = results.map(r => {
         if (isHtml(r)) {
             return r.toString();
@@ -503,4 +658,67 @@ export function each(array, mapFn) {
     }).join('');
 
     return raw(joined);
+}
+/**
+ * Convert compiled tree to HTML string (for backwards compatibility)
+ * @param {Object} tree - Compiled template tree
+ * @returns {string} HTML string
+ */
+function treeToString(tree) {
+    if (!tree) return '';
+
+    if (tree.type === 'text') {
+        return tree.value || '';
+    }
+
+    if (tree.type === 'html') {
+        return tree.value || '';
+    }
+
+    if (tree.type === 'fragment') {
+        return tree.children.map(treeToString).join('');
+    }
+
+    if (tree.type === 'element') {
+        const {tag, attrs = {}, children = []} = tree;
+        const attrStr = Object.entries(attrs)
+            .map(([name, value]) => {
+                if (value && typeof value === 'object' && value.propValue !== undefined) {
+                    return ''; // Skip object props in string representation
+                }
+                return value === '' ? name : `${name}="${value}"`;
+            })
+            .filter(Boolean)
+            .join(' ');
+
+        const childrenStr = children.map(treeToString).join('');
+
+        const attrsPart = attrStr ? ` ${attrStr}` : '';
+
+        // Void elements
+        const voidElements = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+        if (voidElements.has(tag)) {
+            return `<${tag}${attrsPart}>`;
+        }
+
+        return `<${tag}${attrsPart}>${childrenStr}</${tag}>`;
+    }
+
+    return '';
+}
+
+/**
+ * Register the template compiler for use with html() function
+ * Call this to enable compiled template mode
+ * @param {Object} compiler - Compiler module with compileTemplate and applyValues
+ */
+export function registerTemplateCompiler(compiler) {
+    html._compiler = compiler;
+    html._useCompiled = true;
+}
+
+// Auto-register compiled template system if enabled
+if (USE_COMPILED_TEMPLATES) {
+    registerTemplateCompiler(templateCompiler);
+    console.log('[Template] Compiled template system enabled');
 }

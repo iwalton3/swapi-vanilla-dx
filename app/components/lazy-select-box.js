@@ -53,6 +53,7 @@ export default defineComponent('x-lazy-select-box', {
 
         // Parse options if they're a JSON string
         let optionsList = this.props.options;
+
         if (typeof optionsList === 'string') {
             try {
                 optionsList = JSON.parse(optionsList);
@@ -63,10 +64,9 @@ export default defineComponent('x-lazy-select-box', {
 
         return when(showSelect, html`
             <span on-mouseenter="edit" on-click="edit" on-mouseleave="abandon">
-                <select on-change="commit" on-click="startEditing">
+                <select on-change="commit" on-click="startEditing" value="${this.props.value}">
                     ${each(optionsList, option => {
-                        const selected = option === this.props.value ? true : undefined;
-                        return html`<option value="${option}" selected="${selected}">${option}</option>`;
+                        return html`<option value="${option}">${option}</option>`;
                     })}
                 </select>
             </span>

@@ -1,6 +1,13 @@
 {"featured":[
     {
         "spa": false,
+        "name": "Playground",
+        "path": "/playground.html",
+        "icon": "/theme/terminal.svg",
+        "info": "Interactive demos showcasing the custom zero-dependency web framework features."
+    },
+    {
+        "spa": false,
         "name": "Autopassword",
         "path": "/autopassword/",
         "icon": "/theme/autopassword.svg",

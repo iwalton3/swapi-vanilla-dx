@@ -16,19 +16,29 @@ const effectStack = [];
  * The effect runs immediately and re-runs whenever tracked dependencies change.
  *
  * @param {Function} fn - The effect function to run and track
- * @returns {Function} The effect function that can be called to re-run
+ * @returns {Object} Object with effect function and dispose method
+ * @property {Function} effect - The effect function that can be called to re-run
+ * @property {Function} dispose - Cleanup function to stop tracking and remove all dependencies
  * @example
  * const state = reactive({ count: 0 });
- * createEffect(() => {
+ * const { dispose } = createEffect(() => {
  *     console.log('Count is:', state.count);
  * });
  * // Logs: Count is: 0
  *
  * state.count = 5;
  * // Logs: Count is: 5 (automatically re-runs)
+ *
+ * dispose(); // Stop tracking
+ * state.count = 10; // No longer logs
  */
 export function createEffect(fn) {
+    let disposed = false;
+
     const effect = () => {
+        // Don't run if disposed
+        if (disposed) return;
+
         activeEffect = effect;
         effectStack.push(effect);
         try {
@@ -40,8 +50,36 @@ export function createEffect(fn) {
     };
 
     effect.deps = new Set();
+
+    const dispose = () => {
+        if (disposed) return;
+        disposed = true;
+
+        // Remove this effect from all dependency sets
+        effect.deps.forEach(dep => {
+            dep.delete(effect);
+        });
+
+        // Clear the deps set
+        effect.deps.clear();
+
+        // Remove from effect stack if currently running
+        const index = effectStack.indexOf(effect);
+        if (index !== -1) {
+            effectStack.splice(index, 1);
+        }
+
+        // Clear active effect if this was it
+        if (activeEffect === effect) {
+            activeEffect = null;
+        }
+    };
+
+    // Run effect once
     effect();
-    return effect;
+
+    // Return both the effect and dispose function
+    return { effect, dispose };
 }
 
 /**
@@ -160,8 +198,11 @@ export function reactive(obj) {
             const oldValue = target[key];
             const result = Reflect.set(target, key, value, receiver);
 
-            // Only trigger if value actually changed
-            if (oldValue !== value) {
+            // Trigger if:
+            // 1. Value changed (primitive comparison)
+            // 2. Assigning an object/Proxy (internal state might have changed)
+            const isObjectAssignment = value !== null && typeof value === 'object';
+            if (oldValue !== value || isObjectAssignment) {
                 trigger(target, key);
             }
 
@@ -183,14 +224,18 @@ export function reactive(obj) {
  * The getter function is lazily evaluated and cached until dependencies change.
  *
  * @param {Function} getter - Function that computes the value
- * @returns {Function} Function that returns the current computed value
+ * @returns {Object} Object with computed getter and dispose method
+ * @property {Function} get - Function that returns the current computed value
+ * @property {Function} dispose - Cleanup function to stop tracking
  * @example
  * const state = reactive({ a: 1, b: 2 });
  * const sum = computed(() => state.a + state.b);
  *
- * console.log(sum()); // 3
+ * console.log(sum.get()); // 3
  * state.a = 5;
- * console.log(sum()); // 7 (automatically recomputed)
+ * console.log(sum.get()); // 7 (automatically recomputed)
+ *
+ * sum.dispose(); // Clean up when done
  */
 export function computed(getter) {
     let value;
@@ -198,25 +243,27 @@ export function computed(getter) {
     let firstRun = true;
 
     // Create effect that tracks dependencies and marks dirty on changes
-    createEffect(() => {
+    const { dispose } = createEffect(() => {
         if (firstRun) {
-            // First run: just track dependencies
-            getter();
+            // First run: compute value and track dependencies
+            value = getter();
+            dirty = false;
             firstRun = false;
         } else {
-            // Subsequent runs: mark as dirty
-            getter();  // Re-track dependencies
+            // Subsequent runs: mark as dirty (recompute on next get)
             dirty = true;
         }
     });
 
-    return () => {
+    const get = () => {
         if (dirty) {
             value = getter();
             dirty = false;
         }
         return value;
     };
+
+    return { get, dispose };
 }
 
 /**
@@ -225,10 +272,11 @@ export function computed(getter) {
  *
  * @param {Function} fn - Function that returns the value to watch
  * @param {Function} [callback] - Callback to run on changes (receives newValue, oldValue)
+ * @returns {Function} Dispose function to stop watching
  * @example
  * const state = reactive({ count: 0 });
  *
- * watch(
+ * const stopWatching = watch(
  *     () => state.count,
  *     (newCount, oldCount) => {
  *         console.log(`Count changed from ${oldCount} to ${newCount}`);
@@ -236,17 +284,20 @@ export function computed(getter) {
  * );
  *
  * state.count = 5; // Logs: Count changed from 0 to 5
+ * stopWatching(); // Stop watching
  */
 export function watch(fn, callback) {
     let oldValue;
 
-    createEffect(() => {
+    const { dispose } = createEffect(() => {
         const newValue = fn();
         if (callback && oldValue !== undefined) {
             callback(newValue, oldValue);
         }
         oldValue = newValue;
     });
+
+    return dispose;
 }
 
 /**
@@ -263,4 +314,105 @@ export function watch(fn, callback) {
  */
 export function isReactive(value) {
     return !!(value && value.__isReactive);
+}
+
+/**
+ * Memoizes a function and tracks its dependencies.
+ * The cached value is only recomputed when dependencies change.
+ * Much more efficient than recomputing templates on every render.
+ *
+ * @param {Function} fn - The function to memoize
+ * @param {Array} [deps] - Optional explicit dependencies to track
+ * @returns {Function} Memoized function that returns cached value when possible
+ * @example
+ * // In component:
+ * this._memoizedTemplate = memo(() => {
+ *     return html`<div>${this.state.items.length} items</div>`;
+ * }, [this.state.items]);
+ *
+ * template() {
+ *     return this._memoizedTemplate();  // Only recomputes if items changed
+ * }
+ */
+export function memo(fn, deps) {
+    let cachedValue;
+    let lastDeps = null;
+    let dirty = true;
+
+    return (...args) => {
+        // Check if dependencies changed
+        if (deps) {
+            const depsChanged = !lastDeps || deps.some((dep, i) => dep !== lastDeps[i]);
+            if (depsChanged) {
+                dirty = true;
+                lastDeps = [...deps];
+            }
+        }
+
+        // Recompute if dirty
+        if (dirty) {
+            cachedValue = fn(...args);
+            dirty = false;
+        }
+
+        return cachedValue;
+    };
+}
+
+/**
+ * Efficiently track all properties of a reactive object.
+ * This recursively accesses all enumerable properties to register dependencies
+ * without the overhead of JSON.stringify.
+ *
+ * @param {Object} obj - The reactive object to track
+ * @param {Set} [visited] - Internal set to prevent circular references
+ * @example
+ * const state = reactive({ count: 0, nested: { value: 10 } });
+ * createEffect(() => {
+ *     trackAllDependencies(state);  // Tracks all changes to state
+ *     console.log('State changed!');
+ * });
+ */
+export function trackAllDependencies(obj, visited = new Set()) {
+    // Handle null/undefined
+    if (obj === null || obj === undefined) return;
+
+    // Handle primitives
+    if (typeof obj !== 'object') return;
+
+    // Prevent circular references
+    if (visited.has(obj)) return;
+    visited.add(obj);
+
+    // Handle arrays
+    if (Array.isArray(obj)) {
+        // Access length to track array changes
+        obj.length;
+        // Access each element
+        for (let i = 0; i < obj.length; i++) {
+            const item = obj[i];
+            if (typeof item === 'object' && item !== null) {
+                trackAllDependencies(item, visited);
+            }
+        }
+        return;
+    }
+
+    // Handle objects
+    try {
+        const keys = Object.keys(obj);
+        for (const key of keys) {
+            try {
+                const value = obj[key];  // Access triggers tracking
+                // Recursively track nested objects
+                if (typeof value === 'object' && value !== null) {
+                    trackAllDependencies(value, visited);
+                }
+            } catch (e) {
+                // Skip properties that throw on access
+            }
+        }
+    } catch (e) {
+        // Skip objects that don't support Object.keys
+    }
 }
