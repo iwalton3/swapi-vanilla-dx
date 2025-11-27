@@ -41,6 +41,12 @@ import { defineComponent } from './lib/core/component.js';
 ### `framework.js`
 **Components:**
 - `defineComponent(name, options)` - Define a custom element component
+  - `props: {}` - Define reactive props with defaults (accessible via HTML attributes or properties)
+  - `data()` - Define reactive state
+  - `methods: {}` - Define component methods
+  - `template()` - Define component template using `html``
+  - `mounted()`, `unmounted()`, `afterRender()` - Lifecycle hooks
+  - `styles` - Scoped component styles
 
 **Templates:**
 - `html`` ` - Tagged template for HTML with auto-escaping
@@ -85,6 +91,62 @@ const router = new Router({
 - `notifications` - Reactive store of current notifications
 - `darkTheme` - Reactive dark theme store
 - `localStore(key, initial)` - localStorage-backed reactive store
+
+## Quick Start
+
+### Basic Component with Props
+
+```javascript
+import { defineComponent, html } from './lib/framework.js';
+
+export default defineComponent('my-button', {
+    // Define reactive props
+    props: {
+        label: 'Click me',
+        disabled: false
+    },
+
+    // Define reactive state
+    data() {
+        return {
+            clicks: 0
+        };
+    },
+
+    // Define methods
+    methods: {
+        handleClick() {
+            this.state.clicks++;
+        }
+    },
+
+    // Define template
+    template() {
+        return html`
+            <button on-click="handleClick" disabled="${this.props.disabled}">
+                ${this.props.label} (${this.state.clicks})
+            </button>
+        `;
+    }
+});
+```
+
+### Using the Component
+
+```html
+<!-- Via HTML attributes (textual props) -->
+<my-button label="Submit" disabled="false"></my-button>
+
+<!-- Via JavaScript (any type) -->
+<script type="module">
+    const btn = document.querySelector('my-button');
+    btn.label = 'New Label';      // Triggers re-render
+    btn.disabled = true;           // Triggers re-render
+</script>
+
+<!-- In parent component template (complex types work!) -->
+<my-button label="${this.state.buttonText}" disabled="${this.state.isLoading}"></my-button>
+```
 
 ## Examples
 

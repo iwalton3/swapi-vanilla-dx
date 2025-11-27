@@ -334,6 +334,178 @@ afterRender() {
 }
 ```
 
+## Receiving Props with Reactivity
+
+Components can define props that are reactive and can be set via HTML attributes or programmatically. **All props support full reactivity** - changes trigger automatic re-renders.
+
+### Defining Props
+
+Define props in the component definition with default values:
+
+```javascript
+export default defineComponent('user-card', {
+    props: {
+        username: '',           // String prop
+        userId: 0,              // Number prop
+        tags: [],               // Array prop
+        onSave: null           // Function prop
+    },
+
+    template() {
+        // Access props via this.props
+        return html`
+            <div class="card">
+                <h2>${this.props.username}</h2>
+                <p>ID: ${this.props.userId}</p>
+                <p>Tags: ${this.props.tags.join(', ')}</p>
+            </div>
+        `;
+    }
+});
+```
+
+### Setting Props - Three Ways
+
+**1. HTML Attributes (Textual Props)**
+
+Props can be set via regular HTML attributes. The framework automatically parses JSON values:
+
+```html
+<!-- In HTML or at root level -->
+<user-card username="alice" userId="123"></user-card>
+
+<!-- Parsed as: username="alice" (string), userId=123 (number via JSON.parse) -->
+```
+
+**How it works:**
+- All props are automatically registered as `observedAttributes`
+- Attribute values are parsed as JSON first, falling back to strings
+- Changes to attributes after mount trigger re-renders via `attributeChangedCallback`
+
+**2. JavaScript Properties**
+
+Props can be set programmatically, triggering automatic re-renders:
+
+```javascript
+const card = document.querySelector('user-card');
+card.username = 'bob';              // ✅ Triggers re-render
+card.userId = 456;                  // ✅ Triggers re-render
+card.tags = ['admin', 'developer']; // ✅ Triggers re-render
+```
+
+**How it works:**
+- Framework creates property descriptors for each prop
+- Setting `el.propName = value` updates `el.props.propName` and triggers re-render
+- Works at any time (before or after mount)
+
+**3. From Parent Templates**
+
+When passed from a parent component template, complex types are passed by reference:
+
+```javascript
+// Parent component
+template() {
+    return html`
+        <user-card
+            username="${this.state.currentUser}"
+            userId="${this.state.userId}"
+            tags="${this.state.userTags}"           <!-- Array passed directly -->
+            onSave="${this.handleSave}">            <!-- Function passed directly -->
+        </user-card>
+    `;
+}
+```
+
+**How it works:**
+- Framework detects custom elements (tags with hyphens)
+- Objects/arrays/functions are passed via property assignment, not stringified
+- Strings/numbers are passed as strings (parsed by child component)
+
+### Reactivity Guarantees
+
+**All these trigger re-renders:**
+```javascript
+// Via setAttribute
+el.setAttribute('username', 'charlie');
+
+// Via property setter
+el.username = 'charlie';
+
+// Via direct prop mutation (if reactive)
+el.props.username = 'charlie';
+
+// From parent re-render (automatic)
+```
+
+### Complete Example
+
+```javascript
+// Define component with props
+export default defineComponent('product-card', {
+    props: {
+        name: '',
+        price: 0,
+        inStock: true,
+        tags: [],
+        onBuy: null
+    },
+
+    methods: {
+        handleBuyClick() {
+            if (this.props.onBuy) {
+                this.props.onBuy(this.props.name, this.props.price);
+            }
+        }
+    },
+
+    template() {
+        return html`
+            <div class="product">
+                <h3>${this.props.name}</h3>
+                <p class="price">$${this.props.price}</p>
+                <p class="stock">${this.props.inStock ? 'In Stock' : 'Out of Stock'}</p>
+                <p class="tags">${this.props.tags.join(', ')}</p>
+                <button on-click="handleBuyClick" disabled="${!this.props.inStock}">
+                    Buy Now
+                </button>
+            </div>
+        `;
+    }
+});
+
+// Use in HTML (textual props)
+<product-card name="Widget" price="29.99" inStock="true"></product-card>
+
+// Use programmatically
+const card = document.createElement('product-card');
+card.name = 'Gadget';
+card.price = 49.99;
+card.inStock = true;
+card.tags = ['electronics', 'new'];
+card.onBuy = (name, price) => console.log(`Buying ${name} for $${price}`);
+document.body.appendChild(card);
+
+// Use in parent template
+template() {
+    return html`
+        <product-card
+            name="${product.name}"
+            price="${product.price}"
+            inStock="${product.inStock}"
+            tags="${product.tags}"                  <!-- Array passed directly -->
+            onBuy="${this.handleProductPurchase}">  <!-- Function passed directly -->
+        </product-card>
+    `;
+}
+```
+
+### Security Note
+
+The framework includes security protections for props:
+- Reserved property names (constructor, __proto__, etc.) are blocked
+- URL attributes are sanitized automatically
+- JSON parsing failures fall back to strings safely
+
 ## Template Helpers
 
 ### `html` - Tagged Template Literal
