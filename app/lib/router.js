@@ -1,12 +1,22 @@
 /**
  * Router System
- * Hash-based routing with nested routes and query parameters
+ *
+ * Client-side routing with support for:
+ * - Hash-based routing (default)
+ * - HTML5 History API routing (with <base> tag)
+ * - Lazy loading routes with dynamic imports
+ * - Route guards and hooks
+ * - Query parameters
+ * - Nested routes
  */
 
 import { createStore, pruneTemplateCache } from './framework.js';
 
 /**
  * Parse query string into object
+ * @private
+ * @param {string} queryString - Query string to parse
+ * @returns {Object<string, string>} Parsed query parameters
  */
 function parseQuery(queryString) {
     if (!queryString) return {};
@@ -26,6 +36,9 @@ function parseQuery(queryString) {
 
 /**
  * Convert object to query string
+ * @private
+ * @param {Object<string, any>} params - Parameters to stringify
+ * @returns {string} Query string
  */
 function stringifyQuery(params) {
     const pairs = [];
@@ -40,9 +53,36 @@ function stringifyQuery(params) {
 }
 
 /**
- * Router class for managing navigation
+ * Router class for managing client-side navigation
+ *
+ * @typedef {Object} RouteConfig
+ * @property {string} component - Component tag name to render
+ * @property {() => Promise<any>} [load] - Optional lazy load function (dynamic import)
+ * @property {string} [require] - Optional capability requirement for access control
+ * @property {Object} [meta] - Optional metadata for the route
+ * @property {Object<string, RouteConfig>} [routes] - Optional nested routes
+ *
+ * @example
+ * const router = new Router({
+ *   '/': {
+ *     component: 'home-page',
+ *     load: () => import('./home.js')
+ *   },
+ *   '/admin/': {
+ *     component: 'admin-page',
+ *     require: 'admin',
+ *     load: () => import('./admin.js')
+ *   }
+ * });
+ *
+ * router.setOutlet(document.querySelector('router-outlet'));
  */
 export class Router {
+    /**
+     * Create a new router instance
+     * @param {Object<string, RouteConfig>} routes - Route configuration map
+     * @param {Object} [options={}] - Router options (reserved for future use)
+     */
     constructor(routes, options = {}) {
         this.routes = {};
         this.beforeHooks = [];
@@ -99,6 +139,7 @@ export class Router {
     /**
      * Clean up router resources
      * Call this when destroying the router instance
+     * @returns {void}
      */
     destroy() {
         // Remove all event listeners
@@ -114,6 +155,8 @@ export class Router {
 
     /**
      * Detect if we should use HTML5 routing (base tag present)
+     * @private
+     * @returns {boolean}
      */
     _detectRoutingMode() {
         const baseTag = document.querySelector('base[href]');
@@ -122,6 +165,8 @@ export class Router {
 
     /**
      * Get base URL for routing
+     * @private
+     * @returns {string}
      */
     _getBase() {
         if (this.useHTML5) {
@@ -146,6 +191,10 @@ export class Router {
 
     /**
      * Flatten nested routes into flat map
+     * @private
+     * @param {Object<string, RouteConfig>} routes - Routes to flatten
+     * @param {string} [prefix=''] - Path prefix for nested routes
+     * @returns {void}
      */
     _flattenRoutes(routes, prefix = '') {
         for (const [path, config] of Object.entries(routes)) {
@@ -172,7 +221,14 @@ export class Router {
     }
 
     /**
-     * Navigate to a path
+     * Navigate to a path (adds history entry)
+     * @param {string} path - Path to navigate to (e.g., '/about', '/users/123')
+     * @param {Object<string, string>} [query={}] - Optional query parameters
+     * @returns {void}
+     *
+     * @example
+     * router.navigate('/about');
+     * router.navigate('/search', { q: 'test', page: '2' });
      */
     navigate(path, query = {}) {
         const queryString = stringifyQuery(query);
@@ -190,7 +246,13 @@ export class Router {
     }
 
     /**
-     * Replace current route (no history entry)
+     * Replace current route without adding history entry
+     * @param {string} path - Path to navigate to
+     * @param {Object<string, string>} [query={}] - Optional query parameters
+     * @returns {void}
+     *
+     * @example
+     * router.replace('/login'); // Replaces current entry
      */
     replace(path, query = {}) {
         const queryString = stringifyQuery(query);
@@ -208,28 +270,48 @@ export class Router {
     }
 
     /**
-     * Go back in history
+     * Go back in browser history
+     * @returns {void}
      */
     back() {
         window.history.back();
     }
 
     /**
-     * Go forward in history
+     * Go forward in browser history
+     * @returns {void}
      */
     forward() {
         window.history.forward();
     }
 
     /**
-     * Register a before-navigation hook
+     * Register a before-navigation hook (runs before route changes)
+     * @param {(context: {path: string, query: Object, route: RouteConfig}) => boolean|void|Promise<boolean|void>} fn - Hook function (return false to cancel navigation)
+     * @returns {void}
+     *
+     * @example
+     * router.beforeEach(({ path, route }) => {
+     *   if (route.require && !hasPermission(route.require)) {
+     *     router.navigate('/unauthorized');
+     *     return false; // Cancel navigation
+     *   }
+     * });
      */
     beforeEach(fn) {
         this.beforeHooks.push(fn);
     }
 
     /**
-     * Register an after-navigation hook
+     * Register an after-navigation hook (runs after route changes)
+     * @param {(context: {path: string, query: Object, route: RouteConfig}) => void|Promise<void>} fn - Hook function
+     * @returns {void}
+     *
+     * @example
+     * router.afterEach(({ path }) => {
+     *   console.log('Navigated to:', path);
+     *   trackPageView(path);
+     * });
      */
     afterEach(fn) {
         this.afterHooks.push(fn);
@@ -237,6 +319,8 @@ export class Router {
 
     /**
      * Handle route change
+     * @private
+     * @returns {Promise<void>}
      */
     async handleRoute() {
         let path, queryString;
@@ -325,7 +409,12 @@ export class Router {
     }
 
     /**
-     * Set the outlet element where components will be rendered
+     * Set the outlet element where routed components will be rendered
+     * @param {HTMLElement} element - Router outlet element (typically <router-outlet>)
+     * @returns {void}
+     *
+     * @example
+     * router.setOutlet(document.querySelector('router-outlet'));
      */
     setOutlet(element) {
         // Clean up previous subscription if it exists
@@ -343,6 +432,8 @@ export class Router {
 
     /**
      * Render the current component in the outlet
+     * @private
+     * @returns {void}
      */
     _renderOutlet() {
         if (!this.outletElement) {
@@ -360,7 +451,14 @@ export class Router {
     }
 
     /**
-     * Generate URL for a route
+     * Generate URL for a route (respects routing mode)
+     * @param {string} path - Route path
+     * @param {Object<string, string>} [query={}] - Optional query parameters
+     * @returns {string} Complete URL (hash or HTML5 based on mode)
+     *
+     * @example
+     * router.url('/about'); // Returns '#/about' or '/app/about' depending on mode
+     * router.url('/search', { q: 'test' }); // '/search?q=test'
      */
     url(path, query = {}) {
         const queryString = stringifyQuery(query);
@@ -375,7 +473,22 @@ export class Router {
 }
 
 /**
- * Create a router outlet custom element
+ * Define the <router-outlet> custom element
+ *
+ * This creates a placeholder element where routed components are rendered.
+ * Call this once before creating the router.
+ *
+ * @returns {void}
+ *
+ * @example
+ * import { defineRouterOutlet, Router } from './lib/router.js';
+ *
+ * defineRouterOutlet();
+ * const router = new Router({ ... });
+ * router.setOutlet(document.querySelector('router-outlet'));
+ *
+ * // In HTML:
+ * // <router-outlet></router-outlet>
  */
 export function defineRouterOutlet() {
     if (customElements.get('router-outlet')) {
@@ -392,7 +505,23 @@ export function defineRouterOutlet() {
 }
 
 /**
- * Create a router link component
+ * Define the <router-link> custom element for declarative navigation
+ *
+ * Creates clickable links that use the router for navigation.
+ * Automatically intercepts clicks in HTML5 mode.
+ *
+ * @param {Router} router - Router instance to use for navigation
+ * @returns {void}
+ *
+ * @example
+ * import { defineRouterLink, Router } from './lib/router.js';
+ *
+ * const router = new Router({ ... });
+ * defineRouterLink(router);
+ *
+ * // In templates:
+ * // <router-link to="/about">About</router-link>
+ * // <router-link to="/users/123" class="nav-link">User Profile</router-link>
  */
 export function defineRouterLink(router) {
     if (customElements.get('router-link')) {

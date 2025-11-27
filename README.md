@@ -1,38 +1,163 @@
-# SWAPI Client - Zero-Dependency Vanilla JavaScript Framework
+# Zero-Dependency Vanilla JavaScript Framework
 
-Please note: This is EXPERIMENTAL and CLAUDE-generated code. The idea behind this project
-was to create a web framework as close to a modern web framework as possible that has
-ZERO dependencies on NPM. In the age of code rot, supply chain vulnerabilities, and
-dependency chains so big you cannot hope to review everything, sometimes it's desirable
-to explore other options. This project is one such exploration.
-
-This is a client for SWAPI (Simple Web API) built with a custom zero-dependency vanilla JavaScript framework. It features modern reactive state management, an innovative compiled template system, and vendored Preact for efficient DOM reconciliation - all without npm or build tools.
+**EXPERIMENTAL** - A web framework as close to modern frameworks as possible, but with **ZERO npm dependencies**. In the age of code rot, supply chain vulnerabilities, and dependency chains too big to review, this project explores another path.
 
 ## What Makes This Special
 
-- **Zero npm dependencies** - No package.json, no node_modules
+This is **not another JavaScript framework**. This is a statement about sustainability, security, and simplicity in web development.
+
+### Core Principles
+
+- **Zero npm dependencies** - No package.json, no node_modules, no supply chain risk
 - **No build step** - Runs directly in the browser using ES6 modules
-- **Vendored Preact** - Includes Preact 10.x (~4KB) for efficient rendering
-- **Innovative template compiler** - Compiles `html` templates once, applies values on re-render
-- **Smart two-way binding** - `x-model` with automatic type conversion (even React doesn't have this!)
+- **Battle-tested core** - Vendored Preact (~4KB) for DOM reconciliation
+- **Modern DX** - Reactive state, components, routing, two-way binding
+- **Production ready** - 125 passing tests, XSS protection, used in real apps
+
+### Technical Innovation
+
+- **Template compilation system** - Compiles `html`` templates once, applies values on re-render
+- **Smart two-way binding** - `x-model` with automatic type conversion (React doesn't have this!)
 - **Chainable event handlers** - Combine x-model with on-input/on-change for custom logic
-- **Auto-bound methods** - No manual `.bind(this)` needed, just works
+- **Auto-bound methods** - No manual `.bind(this)` needed
 - **Computed properties** - Memoized values with dependency tracking
 - **Virtual scrolling** - Efficiently render massive lists
-- **Modern & secure** - Built-in XSS protection, reactive state, component system
-- **Production ready** - Comprehensive test suite with 125 passing tests
-- **Clean architecture** - ~3000 lines of well-documented framework code
 
 ## Quick Start
 
 ```bash
 cd app
-python3 -m http.server 8000
+python3 test-server.py
 ```
 
-Then open: http://localhost:8000/
+Then open: **http://localhost:9000/**
 
 That's it! No `npm install`, no build process, no dependencies to install.
+
+## Hello World
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+    <my-counter></my-counter>
+
+    <script type="module">
+        import { defineComponent, html } from './lib/framework.js';
+
+        defineComponent('my-counter', {
+            data() {
+                return { count: 0 };
+            },
+
+            template() {
+                return html`
+                    <div>
+                        <h1>Count: ${this.state.count}</h1>
+                        <button on-click="${() => this.state.count++}">
+                            Increment
+                        </button>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+No compilation. No bundling. Just refresh your browser.
+
+## Two-Way Data Binding Example
+
+A feature even React doesn't have - automatic two-way data binding with type conversion:
+
+```javascript
+import { defineComponent, html } from './lib/framework.js';
+
+defineComponent('user-form', {
+    data() {
+        return {
+            username: '',
+            age: 18,
+            newsletter: false
+        };
+    },
+
+    methods: {
+        handleSubmit(e) {
+            e.preventDefault();
+            console.log({
+                username: this.state.username,
+                age: this.state.age,          // Already a number!
+                newsletter: this.state.newsletter  // Already a boolean!
+            });
+        }
+    },
+
+    template() {
+        return html`
+            <form on-submit-prevent="handleSubmit">
+                <input type="text" x-model="username" placeholder="Username">
+                <input type="number" x-model="age" min="13" max="120">
+                <label>
+                    <input type="checkbox" x-model="newsletter">
+                    Subscribe to newsletter
+                </label>
+                <button type="submit">Submit</button>
+            </form>
+
+            <pre>
+                Username: ${this.state.username}
+                Age: ${this.state.age} (type: ${typeof this.state.age})
+                Newsletter: ${this.state.newsletter}
+            </pre>
+        `;
+    }
+});
+```
+
+The framework automatically:
+- Uses the correct attribute (`value` or `checked`)
+- Sets up the right event (`input` or `change`)
+- Converts types (numbers, booleans) automatically
+- Updates state and re-renders on changes
+
+## Architecture
+
+### How It Works
+
+1. **Template Compilation** - `html`` templates compiled once to AST structure
+2. **Value Application** - On each render, values applied to create Preact VNodes
+3. **Preact Reconciliation** - Preact efficiently updates the real DOM
+
+```javascript
+// Template compiled once when first rendered ✓
+const template = html`<div>${this.state.count}</div>`;
+
+// On re-render: apply new values → Preact VNode → Preact reconciles DOM
+```
+
+### Why This Approach?
+
+- **No string manipulation on re-render** - Template structure cached
+- **Efficient updates** - Preact's battle-tested VDOM reconciliation
+- **Type safety** - Functions and objects passed by reference, not serialized
+- **Zero build** - No JSX transform, no bundler, runs in browser
+- **Familiar syntax** - Keep the `html`` tagged template syntax developers love
+
+### Why Vendor Preact?
+
+**Q**: Why include Preact instead of writing a custom VDOM?
+
+**A**: Several reasons:
+1. **Battle-tested** - Used in production by thousands of sites
+2. **Tiny** - Only ~4KB gzipped, smaller than most custom implementations
+3. **Efficient** - Highly optimized reconciliation algorithm
+4. **No npm needed** - We vendor it, no package.json required
+5. **Focus on innovation** - Spend time on template compilation, not reimplementing VDOM
+
+The innovative part is the **template compilation system** that converts `html`` templates to Preact VNodes efficiently without JSX or a build step.
 
 ## Project Structure
 
@@ -55,10 +180,6 @@ app/
 │   ├── router.js            # Standalone router (~10KB)
 │   └── utils.js             # Standalone utilities (~7KB)
 ├── components/              # Shared UI components
-│   ├── app-header.js
-│   ├── page.js, x-page.js
-│   ├── icon.js, select-box.js, tiles.js, etc.
-│   └── notification-list.js
 ├── auth/                    # Authentication system
 ├── apps/                    # Application modules
 │   └── pwgen/               # Password generators (3 variants)
@@ -69,7 +190,7 @@ app/
 └── index.html               # Entry point
 ```
 
-### Two Ways to Use the Framework
+## Two Ways to Use the Framework
 
 **1. Library imports (development):**
 ```javascript
@@ -78,304 +199,23 @@ import { Router } from './lib/router.js';
 import { notify, darkTheme } from './lib/utils.js';
 ```
 
+**Benefits:**
+- Clean imports from barrel export files
+- Individual file caching in browser
+- Easy debugging with source maps
+- Smaller initial load for simple apps
+
 **2. Pre-bundled (embedding/simple projects):**
 ```javascript
 import { defineComponent, html, reactive } from './dist/framework.js';
 // Everything in one file - perfect for demos!
 ```
 
-## Architecture: Template Compilation → Preact Rendering
-
-This framework uses an innovative hybrid approach:
-
-1. **Template Compilation** - `html` templates are compiled once to an AST
-2. **Value Application** - On each render, values are applied to create Preact VNodes
-3. **Preact Reconciliation** - Preact efficiently updates the real DOM
-
-```javascript
-// Template compiled once ✓
-const template = html`<div>${this.state.count}</div>`;
-
-// On re-render: just apply new values → VNode → Preact reconciles
-```
-
-### Why This Approach?
-
-- **No string manipulation on re-render** - Template structure cached
-- **Efficient updates** - Preact's battle-tested VDOM reconciliation
-- **Type safety** - Functions and objects passed by reference, not serialized
-- **Zero build** - No JSX transform, no bundler, runs in browser
-- **Familiar syntax** - Keep the `html` tagged template syntax developers love
-
-## Framework Features
-
-### Reactive State
-
-Proxy-based reactivity system inspired by Vue 3:
-
-```javascript
-import { reactive } from './lib/framework.js';
-
-const state = reactive({ count: 0 });
-state.count++; // Automatically triggers re-render
-```
-
-### Two-Way Data Binding (`x-model`)
-
-**Automatic two-way binding for form inputs** - a feature React doesn't have!
-
-```javascript
-// Simple, type-aware binding
-<input type="text" x-model="username">
-<input type="number" x-model="age">        // Automatic number conversion
-<input type="checkbox" x-model="agreed">   // Automatic boolean
-<select x-model="country">...</select>
-<textarea x-model="bio"></textarea>
-
-// Combine x-model with additional event handlers!
-<input
-    type="text"
-    x-model="username"
-    on-input="${() => this.clearError('username')}">
-```
-
-The framework automatically:
-- Uses the correct attribute (`value` or `checked`) based on input type
-- Sets up the right event (`input` or `change`)
-- Converts types (numbers, booleans) automatically
-- Updates state and re-renders on changes
-- **Chains handlers** - x-model works seamlessly with on-input/on-change for custom logic
-
-**Supports all input types**: text, number, email, password, checkbox, radio, select, textarea, range, file
-
-### XSS-Safe Compiled Templates
-
-Tagged template literals with compile-time optimization and runtime XSS protection:
-
-```javascript
-import { html, raw } from './lib/framework.js';
-
-// Automatically escaped - SAFE
-html`<div>${userInput}</div>`
-
-// URL sanitized automatically - SAFE
-html`<a href="${userUrl}">Link</a>`
-
-// Only explicit raw() for trusted content (Symbol-protected)
-html`<div>${raw(trustedApiHtml)}</div>`
-```
-
-The framework:
-- **Compiles templates once** - Structure cached, only values change
-- **Detects URL attributes** (`href`, `src`) and sanitizes automatically
-- **Prevents toString() attacks** - Uses `Object.prototype.toString.call()` for objects
-- **Symbol-based security** - `raw()` and `html()` markers cannot be JSON-injected
-
-**Boolean Attributes**: Use `true`/`undefined` for clean conditional rendering:
-
-```javascript
-const isDisabled = loading;
-html`<button disabled="${isDisabled}">Submit</button>`
-// When loading=true  → <button disabled="">
-// When loading=false → <button>
-
-// Works with all boolean attributes
-html`<input type="checkbox" checked="${isChecked}">`
-html`<option value="1" selected="${isSelected}">Option</option>`
-```
-
-### Component System
-
-Web Components with Preact-powered rendering:
-
-```javascript
-import { defineComponent, html } from './lib/framework.js';
-
-defineComponent('my-component', {
-    data() {
-        return {
-            count: 0,
-            name: '',
-            agreed: false
-        };
-    },
-
-    template() {
-        return html`
-            <div>
-                <p>Count: ${this.state.count}</p>
-                <button on-click="increment">+1</button>
-
-                <input type="text" x-model="name" placeholder="Your name">
-                <p>Hello, ${this.state.name || 'stranger'}!</p>
-
-                <label>
-                    <input type="checkbox" x-model="agreed">
-                    I agree to the terms
-                </label>
-            </div>
-        `;
-    },
-
-    methods: {
-        increment() {
-            this.state.count++;
-        }
-    },
-
-    styles: `
-        :host {
-            display: block;
-            padding: 1rem;
-        }
-        button {
-            background: #007bff;
-            color: white;
-        }
-    `
-});
-```
-
-Components automatically:
-- **Auto-bind methods** - No `.bind(this)` needed, methods just work!
-- Compile templates on first render (cached)
-- Use Preact for efficient DOM updates
-- Scope styles to component tag name (`:host` → `my-component`)
-- Clean up effects and subscriptions on unmount
-
-### Computed Properties
-
-Memoized computed properties with automatic dependency tracking:
-
-```javascript
-import { computed } from './lib/utils.js';
-
-defineComponent('product-list', {
-    data() {
-        return {
-            items: [...], // 1000 items
-            searchQuery: '',
-            sortBy: 'name',
-
-            // Computed property - only recalculates when dependencies change
-            filteredItems: computed((items, query) => {
-                console.log('[Computed] Filtering...');  // Only logs when needed!
-                return items.filter(item =>
-                    item.name.toLowerCase().includes(query.toLowerCase())
-                );
-            })
-        };
-    },
-
-    template() {
-        // Call computed with current dependencies
-        const filtered = this.state.filteredItems(
-            this.state.items,
-            this.state.searchQuery
-        );
-
-        return html`
-            <input type="text" x-model="searchQuery" placeholder="Search...">
-            <div>${filtered.length} items found</div>
-        `;
-    }
-});
-```
-
-Computed properties cache results and only recalculate when dependencies change - perfect for expensive operations like filtering/sorting large lists!
-
-### Router
-
-Supports both hash routing (default) and HTML5 routing:
-
-```javascript
-import { Router } from './lib/router.js';
-
-const router = new Router({
-    '/': { component: 'home-page' },
-    '/about': { component: 'about-page' },
-    '/admin': {
-        component: 'admin-page',
-        require: 'admin' // Capability-based access control
-    }
-});
-
-// Programmatic navigation
-router.navigate('/about');
-router.navigate('/search', { q: 'test', page: '2' });
-
-// Declarative links
-html`<router-link to="/about">About</router-link>`
-```
-
-### Store with Persistence
-
-Reactive stores with optional localStorage persistence:
-
-```javascript
-import { createStore } from './lib/framework.js';
-import { localStore } from './lib/utils.js';
-
-// Simple store
-const counter = createStore({ count: 0 });
-
-// Persistent store (automatically syncs to localStorage)
-const userPrefs = localStore('user-prefs', { theme: 'light' });
-
-// Subscribe to changes
-userPrefs.subscribe(state => {
-    console.log('Preferences updated:', state);
-});
-
-// Update store (automatically persists)
-userPrefs.state.theme = 'dark';
-```
-
-## HTML5 Routing
-
-The router uses hash routing (`/#/`) by default. To use HTML5 routing, add a `<base>` tag:
-
-```html
-<base href="/app/">
-```
-
-The router automatically switches to real paths and redirects hash routes to clean URLs.
-
-### Server Configuration for HTML5 Routing
-
-**Apache** (`.htaccess`):
-```apache
-RewriteEngine on
-RewriteCond %{REQUEST_FILENAME} -s [OR]
-RewriteCond %{REQUEST_FILENAME} -l [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^.*$ - [NC,L]
-RewriteRule ^(.*) index.html [NC,L]
-```
-
-**Nginx**:
-```nginx
-try_files $uri $uri/ /index.html;
-```
-
-## Running Tests
-
-```bash
-cd app
-python3 test-server.py
-```
-
-Then open: http://localhost:9000/tests/
-
-All 125 tests pass, covering:
-- Reactive state system
-- Template compilation and value application
-- Preact VNode generation
-- XSS protection (including toString() attack prevention)
-- Component lifecycle and event binding
-- Router (hash & HTML5 modes)
-- Store persistence
-- Authentication flow
+**Benefits:**
+- Single file download (~74KB framework.js)
+- No dependency resolution needed
+- Perfect for demos and embedding
+- See `app/bundle-demo/` for examples
 
 ## Interactive Playground
 
@@ -386,7 +226,7 @@ cd app
 python3 test-server.py
 ```
 
-Then open: http://localhost:8000/playground.html
+Then open: **http://localhost:9000/playground.html**
 
 Features demonstrated:
 - **Counter** - Reactive state with x-model two-way binding
@@ -398,6 +238,25 @@ Features demonstrated:
 - **Computed** - Memoized properties for efficient filtering/sorting (1000 items)
 - **Virtual Scroll** - Efficiently render huge lists (only visible items)
 
+## Running Tests
+
+```bash
+cd app
+python3 test-server.py
+```
+
+Then open: **http://localhost:9000/tests/**
+
+All 125 tests pass, covering:
+- Reactive state system
+- Template compilation and value application
+- Preact VNode generation
+- XSS protection (including toString() attack prevention)
+- Component lifecycle and event binding
+- Router (hash & HTML5 modes)
+- Store persistence
+- Authentication flow
+
 ## Security Features
 
 ### Defense-in-Depth XSS Protection
@@ -408,25 +267,17 @@ Features demonstrated:
 4. **No dangerous fallbacks** - Removed all `dangerouslySetInnerHTML` except in `raw()`
 5. **CSRF token support** - Automatic inclusion in API requests
 
-### Best Practices
+**Always use the `html` template tag:**
 
 ```javascript
-// ✅ DO: Use html template tag
+// ✅ SAFE - Auto-escaped
 html`<div>${userInput}</div>`
 
-// ✅ DO: Validate input
-if (!/^[a-zA-Z0-9]+$/.test(username)) {
-    throw new Error('Invalid format');
-}
+// ✅ SAFE - URL sanitized
+html`<a href="${userUrl}">Link</a>`
 
-// ✅ DO: Use raw() only for trusted backend HTML
-html`<div>${raw(apiResponse.html)}</div>`
-
-// ❌ DON'T: Concatenate strings
-element.innerHTML = '<div>' + userInput + '</div>'
-
-// ❌ DON'T: Use raw() with user input
-html`<div>${raw(userComment)}</div>` // XSS!
+// ⚠️ USE ONLY FOR TRUSTED CONTENT
+html`<div>${raw(trustedApiHtml)}</div>`
 ```
 
 ## Browser Compatibility
@@ -438,37 +289,30 @@ Requires modern browsers with ES6+ support:
 
 **No IE11 support** - By design (IE11 EOL 2022)
 
-## Why Vendor Preact?
+## Documentation
 
-**Q**: Why include Preact instead of writing a custom VDOM?
-
-**A**: Several reasons:
-1. **Battle-tested** - Preact is used in production by thousands of sites
-2. **Tiny** - Only ~4KB gzipped, smaller than most custom implementations
-3. **Efficient** - Highly optimized reconciliation algorithm
-4. **No npm needed** - We vendor it, no package.json required
-5. **Focus on innovation** - Spend time on template compilation, not reimplementing VDOM
-
-The innovative part is the **template compilation system** that converts `html` templates to Preact VNodes efficiently.
-
-## Development
-
-No build tools needed. Just edit files and refresh!
-
-For detailed framework documentation and conventions, see `CLAUDE.md`.
+- **[CLAUDE.md](CLAUDE.md)** - Quick reference for AI coding assistants
+- **[docs/components.md](docs/components.md)** - Component development patterns
+- **[docs/templates.md](docs/templates.md)** - Template system, x-model, helpers
+- **[docs/reactivity.md](docs/reactivity.md)** - Reactive state, stores, computed
+- **[docs/routing.md](docs/routing.md)** - Router setup, lazy loading
+- **[docs/security.md](docs/security.md)** - XSS protection, input validation
+- **[docs/testing.md](docs/testing.md)** - Running tests, writing tests
+- **[docs/bundles.md](docs/bundles.md)** - Using pre-bundled versions
+- **[docs/api-reference.md](docs/api-reference.md)** - Complete API reference
 
 ## Deployment
 
 Since there's no build step, deployment is simple:
 
-1. Download `api.js` from your SWAPI server:
+1. Download `api.js` from your SWAPI server (if using backend):
    ```bash
    wget https://your-server.com/spa-api/.js -O app/api.js
    ```
 
 2. Copy the `app/` directory to your web server
 
-3. Configure server routing if using HTML5 mode
+3. Configure server routing if using HTML5 mode (see [docs/routing.md](docs/routing.md))
 
 That's it!
 
@@ -483,6 +327,46 @@ This framework combines ideas from:
 
 The template compilation system is our own innovation.
 
+## Use Cases
+
+Perfect for:
+- **Sustainable projects** - No dependency rot or supply chain issues
+- **Embedded environments** - Jellyfin Media Player, Electron apps, etc.
+- **Quick prototypes** - Just drop in one file and start building
+- **Legacy modernization** - Add reactive components without a complete rewrite
+- **Security-conscious projects** - Audit the entire codebase (~3000 lines)
+- **Learning** - Understand how modern frameworks work under the hood
+
+## Philosophy
+
+In a world where a simple "hello world" requires hundreds of megabytes of dependencies, we asked: **What if we didn't?**
+
+This project proves you can have:
+- Modern developer experience
+- Reactive state management
+- Component-based architecture
+- Template compilation
+- Router with lazy loading
+- Type-safe two-way binding
+
+All without npm, without build tools, without the complexity.
+
+**Zero dependencies doesn't mean zero features.**
+
 ## License
 
 See LICENSE.md
+
+## Contributing
+
+This is an experimental project, but PRs are welcome! Please ensure:
+- No npm dependencies are added
+- Tests pass (125 tests in `/app/tests/`)
+- Code follows existing patterns
+- Security best practices maintained
+
+## Acknowledgments
+
+- **Preact team** - For creating an amazing, tiny VDOM library
+- **Vue.js** - For inspiration on reactivity system
+- **lit-html** - For tagged template literal ideas

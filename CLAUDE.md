@@ -4,24 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a web application that uses a **custom zero-dependency vanilla JavaScript framework** (in `/app/`) as a replacement for the original Svelte implementation (in `/src/`). The application is a client for the SWAPI (Simple Web API) server with authentication, various tools (password generators, remote control, location tool, home automation), and supports both modern browsers and legacy browsers with polyfills.
+This is a web application that uses a **custom zero-dependency vanilla JavaScript framework** (in `/app/`). The application is a client for the SWAPI (Simple Web API) server with authentication and various tools. The framework requires **no build step** - it runs directly in the browser using ES6 modules.
 
-## Custom Framework (`/app/` directory)
+## Quick Start
 
-The `/app/` directory contains a completely custom web framework built from scratch with zero dependencies. **All new development should use this framework, NOT Svelte.**
+```bash
+cd app
+python3 test-server.py
+```
 
-### Framework Architecture
+Then open: http://localhost:9000/
+
+## Framework Architecture
 
 - **Zero npm dependencies** - Pure vanilla JavaScript, vendored Preact, no npm packages
+- **No build step** - Runs directly in the browser using ES6 modules
 - **Reactive state management** - Vue 3-style proxy-based reactivity
 - **Web Components** - Built on native Custom Elements API
 - **Preact rendering** - Vendored Preact (~4KB) for efficient DOM reconciliation
-- **Template compilation** - Innovative compile-once system: `html`` → compile → Preact VNode → render`
+- **Template compilation** - Compile-once system: `html`` → compile → Preact VNode → render`
 - **Router** - Hash-based and HTML5 routing with capability checks
 - **Stores** - Reactive stores with localStorage persistence
-- **Template system** - Tagged template literals with helpers (`html`, `when`, `each`, `raw`)
 
-### Project Structure
+## Project Structure
 
 ```
 app/
@@ -29,86 +34,18 @@ app/
 │   ├── framework.js         # Main barrel export (defineComponent, html, reactive, etc.)
 │   ├── router.js            # Router system
 │   ├── utils.js             # Utilities (notify, darkTheme, localStore, etc.)
-│   ├── core/                # Framework internals (~3000 lines)
-│   │   ├── component.js     # Component definition system
-│   │   ├── reactivity.js    # Reactive proxy system
-│   │   ├── template.js      # Template helpers (html, when, each, raw)
-│   │   ├── template-compiler.js # Template → Preact VNode compiler
-│   │   └── store.js         # State management
-│   └── vendor/
-│       └── preact/          # Vendored Preact 10.x (~4KB, no npm!)
+│   └── core/                # Framework internals (~3000 lines)
 ├── dist/                    # Pre-bundled versions for embedding
-│   ├── framework.js         # Complete framework bundle (~74KB)
-│   ├── router.js            # Standalone router (~10KB)
-│   └── utils.js             # Standalone utilities (~7KB)
 ├── components/              # Reusable UI components
-│   ├── app-header.js        # App header component
-│   ├── page.js              # Page component
-│   ├── x-page.js            # Page wrapper component
-│   ├── icon.js
-│   ├── select-box.js
-│   ├── lazy-select-box.js
-│   ├── tiles.js
-│   ├── virtual-list.js
-│   └── notification-list.js
 ├── auth/                    # Authentication system
-├── apps/                    # Application modules (pwgen, etc.)
-├── playground/              # Interactive framework demos
-├── bundle-demo/             # Examples of using dist/ bundles
-├── styles/                  # Global CSS
-│   └── global.css
-└── tests/                   # Comprehensive unit tests (125 tests)
+├── apps/                    # Application modules
+├── tests/                   # Comprehensive unit tests (125 tests)
+└── index.html               # Entry point
 ```
 
-### Using the Framework
+## Core Framework Concepts
 
-The framework can be used in two ways:
-
-**1. Library Imports (Recommended for development)**
-Import from `lib/` for full ES module support with separate files:
-
-```javascript
-// Main framework components
-import { defineComponent, html, reactive, createEffect } from './lib/framework.js';
-
-// Router
-import { Router, defineRouterOutlet, defineRouterLink } from './lib/router.js';
-
-// Utilities
-import { notify, darkTheme, localStore } from './lib/utils.js';
-```
-
-**Benefits:**
-- Clean imports from single barrel export file
-- Individual file caching in browser
-- Easy debugging with source maps
-- Smaller initial load for simple apps
-
-**2. Pre-bundled Versions (For embedding or simple projects)**
-Import from `dist/` for single-file bundles:
-
-```html
-<script type="module">
-  import { defineComponent, html, reactive } from './dist/framework.js';
-
-  // Everything you need is in one file!
-  defineComponent('my-app', {
-    template() {
-      return html`<h1>Hello World!</h1>`;
-    }
-  });
-</script>
-```
-
-**Benefits:**
-- Single file download (~74KB framework.js)
-- No dependency resolution needed
-- Perfect for demos and embedding
-- See `app/bundle-demo/` for examples
-
-## Component Development
-
-### ✅ CORRECT Component Pattern
+### 1. Component Pattern
 
 ```javascript
 import { defineComponent, html, when, each } from './lib/framework.js';
@@ -128,31 +65,18 @@ export default defineComponent('my-component', {
         };
     },
 
-    // Lifecycle: called after component is added to DOM
+    // Lifecycle hooks
     mounted() {
-        this.loadData();
+        // Called after component is added to DOM
     },
 
-    // Lifecycle: called after each render
-    // ⚠️ Often unnecessary with Preact - use only when needed for DOM manipulation
-    afterRender() {
-        // Use only for: imperative DOM APIs, third-party library integration
-        // NOT for: syncing values (Preact handles this), event binding (use on-*)
-    },
-
-    // Lifecycle: called before component is removed
     unmounted() {
-        // Cleanup subscriptions, timers
+        // Called before component is removed - cleanup subscriptions/timers
     },
 
-    // Methods accessible via this.methodName()
+    // Methods
     methods: {
-        async loadData() {
-            this.state.items = await fetchData();
-        },
-
         handleClick(e) {
-            e.preventDefault();
             this.state.message = 'Clicked!';
         }
     },
@@ -160,7 +84,7 @@ export default defineComponent('my-component', {
     // Template using tagged template literals
     template() {
         return html`
-            <div class="container">
+            <div>
                 <h1>${this.props.title}</h1>
                 <p>${this.state.message}</p>
                 <button on-click="handleClick">Click Me</button>
@@ -168,13 +92,8 @@ export default defineComponent('my-component', {
         `;
     },
 
-    // Scoped styles (using component tag name prefix)
+    // Scoped styles
     styles: `
-        .container {
-            padding: 20px;
-        }
-
-        /* Styles are automatically scoped to component tag name */
         button {
             background: #007bff;
             color: white;
@@ -183,379 +102,27 @@ export default defineComponent('my-component', {
 });
 ```
 
-## Rendering Architecture: Preact Integration
+**See [docs/components.md](docs/components.md) for complete component patterns.**
 
-**How it works:**
+### 2. Event Binding - CRITICAL
 
-1. **Template Compilation** - `html`` templates are compiled once to an AST structure
-2. **Value Application** - On each render, values are applied to create Preact VNodes
-3. **Preact Reconciliation** - Preact efficiently updates the real DOM
-
-```javascript
-// Template compiled once when first rendered ✓
-const template = html`<div>${this.state.count}</div>`;
-
-// On re-render: apply new values → Preact VNode → Preact reconciles DOM
-```
-
-**Why Preact?**
-- **Battle-tested** - Used in production by thousands of sites
-- **Tiny** - Only ~4KB gzipped, vendored (no npm needed)
-- **Efficient** - Highly optimized reconciliation algorithm
-- **Zero build** - No JSX transform, no bundler
-
-The innovative part is the **template compilation system** that converts `html`` templates to Preact VNodes efficiently without JSX or a build step.
-
-## Event Binding - CRITICAL
-
-### ✅ ALWAYS Use on-* Attributes
-
-**NEVER use inline onclick or addEventListener in templates!** Always use the framework's `on-*` event binding:
-
-```javascript
-template() {
-    return html`
-        <button on-click="handleClick">Click</button>
-        <form on-submit-prevent="handleSubmit">
-            <input type="text" on-change="handleChange">
-            <select on-change="handleSelect">
-                <option>Option 1</option>
-            </select>
-        </form>
-        <div on-mouseenter="handleHover" on-mouseleave="handleLeave">
-            Hover me
-        </div>
-    `;
-}
-```
-
-**Available event bindings:**
-- `on-click` - Click events
-- `on-change` - Change events
-- `on-submit` - Form submission (you must call `e.preventDefault()`)
-- `on-submit-prevent` - Form submission with automatic `preventDefault()`
-- `on-mouseenter`, `on-mouseleave` - Mouse events
-- `on-input` - Input events
-
-### ❌ NEVER Do This
-
-```javascript
-// ❌ WRONG - Don't use inline handlers
-template() {
-    return html`<button onclick="handleClick()">Click</button>`;
-}
-
-// ❌ WRONG - Don't use addEventListener in templates
-afterRender() {
-    this.querySelector('button').addEventListener('click', this.handleClick);
-}
-```
-
-## Passing Props to Child Components
-
-### ✅ Automatic Object/Function Passing for Custom Elements
-
-The framework **automatically** passes objects, arrays, and functions to custom elements (Web Components) without stringification. Just use regular `${}` interpolation:
-
-```javascript
-template() {
-    return html`
-        <!-- ✅ CORRECT - Arrays/objects/functions passed automatically -->
-        <x-select-box
-            options="${this.state.lengthOptions}"
-            value="${this.state.length}"
-            on-change="handleChange">
-        </x-select-box>
-
-        <!-- ✅ Functions work too! -->
-        <virtual-list
-            items="${this.state.items}"
-            renderItem="${this._boundRenderItem}">
-        </virtual-list>
-    `;
-}
-```
-
-**How it works:**
-- Framework detects custom elements (tags with hyphens like `x-select-box`)
-- For custom element attributes, objects/arrays/functions are passed by reference automatically
-- For native HTML elements (`<input>`, `<div>`, etc.), values are converted to strings as normal
-- You can pass any JavaScript expression: `"${this.state.items.filter(x => x.active)}"`
-
-### Examples
-
-```javascript
-methods: {
-    handleItemRender(item, index) {
-        return html`<div>${item.name}</div>`;
-    }
-},
-
-template() {
-    return html`
-        <!-- Custom elements: objects/functions passed automatically -->
-        <x-select-box options="${this.state.options}"></x-select-box>
-        <my-list items="${this.getFilteredItems()}"></my-list>
-        <data-table rows="${this.state.rows}" config="${{ sortable: true }}"></data-table>
-
-        <!-- Methods are auto-bound - just pass them directly! -->
-        <virtual-list items="${this.state.items}" renderItem="${this.handleItemRender}"></virtual-list>
-
-        <!-- Native HTML: values converted to strings -->
-        <input value="${this.state.username}">
-        <div data-count="${this.state.count}"></div>
-    `;
-}
-```
-
-**Important:** Methods are **automatically bound** to the component instance in the constructor. Just pass them directly like `this.methodName` - no manual binding needed!
-
-### ❌ Don't Use JSON.stringify or Manual Binding
-
-```javascript
-// ❌ WRONG - Don't stringify (framework does it automatically)
-<x-select-box options="${JSON.stringify(this.state.options)}">
-
-// ❌ WRONG - Don't manually bind (methods are already bound!)
-mounted() {
-    this._boundRender = this.handleRender.bind(this);
-}
-
-// ✅ CORRECT - Just pass the method directly
-template() {
-    return html`
-        <virtual-list renderItem="${this.handleRender}">
-    `;
-}
-
-// ❌ WRONG - Don't manually set props in afterRender
-afterRender() {
-    this.querySelector('x-select-box').props.options = this.state.options;
-}
-```
-
-## Receiving Props with Reactivity
-
-Components can define props that are reactive and can be set via HTML attributes or programmatically. **All props support full reactivity** - changes trigger automatic re-renders.
-
-### Defining Props
-
-Define props in the component definition with default values:
-
-```javascript
-export default defineComponent('user-card', {
-    props: {
-        username: '',           // String prop
-        userId: 0,              // Number prop
-        tags: [],               // Array prop
-        onSave: null           // Function prop
-    },
-
-    template() {
-        // Access props via this.props
-        return html`
-            <div class="card">
-                <h2>${this.props.username}</h2>
-                <p>ID: ${this.props.userId}</p>
-                <p>Tags: ${this.props.tags.join(', ')}</p>
-            </div>
-        `;
-    }
-});
-```
-
-### Setting Props - Three Ways
-
-**1. HTML Attributes (Textual Props)**
-
-Props can be set via regular HTML attributes. The framework automatically parses JSON values:
-
-```html
-<!-- In HTML or at root level -->
-<user-card username="alice" userId="123"></user-card>
-
-<!-- Parsed as: username="alice" (string), userId=123 (number via JSON.parse) -->
-```
-
-**How it works:**
-- All props are automatically registered as `observedAttributes`
-- Attribute values are parsed as JSON first, falling back to strings
-- Changes to attributes after mount trigger re-renders via `attributeChangedCallback`
-
-**2. JavaScript Properties**
-
-Props can be set programmatically, triggering automatic re-renders:
-
-```javascript
-const card = document.querySelector('user-card');
-card.username = 'bob';              // ✅ Triggers re-render
-card.userId = 456;                  // ✅ Triggers re-render
-card.tags = ['admin', 'developer']; // ✅ Triggers re-render
-```
-
-**How it works:**
-- Framework creates property descriptors for each prop
-- Setting `el.propName = value` updates `el.props.propName` and triggers re-render
-- Works at any time (before or after mount)
-
-**3. From Parent Templates**
-
-When passed from a parent component template, complex types are passed by reference:
-
-```javascript
-// Parent component
-template() {
-    return html`
-        <user-card
-            username="${this.state.currentUser}"
-            userId="${this.state.userId}"
-            tags="${this.state.userTags}"           <!-- Array passed directly -->
-            onSave="${this.handleSave}">            <!-- Function passed directly -->
-        </user-card>
-    `;
-}
-```
-
-**How it works:**
-- Framework detects custom elements (tags with hyphens)
-- Objects/arrays/functions are passed via property assignment, not stringified
-- Strings/numbers are passed as strings (parsed by child component)
-
-### Reactivity Guarantees
-
-**All these trigger re-renders:**
-```javascript
-// Via setAttribute
-el.setAttribute('username', 'charlie');
-
-// Via property setter
-el.username = 'charlie';
-
-// Via direct prop mutation (if reactive)
-el.props.username = 'charlie';
-
-// From parent re-render (automatic)
-```
-
-### Complete Example
-
-```javascript
-// Define component with props
-export default defineComponent('product-card', {
-    props: {
-        name: '',
-        price: 0,
-        inStock: true,
-        tags: [],
-        onBuy: null
-    },
-
-    methods: {
-        handleBuyClick() {
-            if (this.props.onBuy) {
-                this.props.onBuy(this.props.name, this.props.price);
-            }
-        }
-    },
-
-    template() {
-        return html`
-            <div class="product">
-                <h3>${this.props.name}</h3>
-                <p class="price">$${this.props.price}</p>
-                <p class="stock">${this.props.inStock ? 'In Stock' : 'Out of Stock'}</p>
-                <p class="tags">${this.props.tags.join(', ')}</p>
-                <button on-click="handleBuyClick" disabled="${!this.props.inStock}">
-                    Buy Now
-                </button>
-            </div>
-        `;
-    }
-});
-
-// Use in HTML (textual props)
-<product-card name="Widget" price="29.99" inStock="true"></product-card>
-
-// Use programmatically
-const card = document.createElement('product-card');
-card.name = 'Gadget';
-card.price = 49.99;
-card.inStock = true;
-card.tags = ['electronics', 'new'];
-card.onBuy = (name, price) => console.log(`Buying ${name} for $${price}`);
-document.body.appendChild(card);
-
-// Use in parent template
-template() {
-    return html`
-        <product-card
-            name="${product.name}"
-            price="${product.price}"
-            inStock="${product.inStock}"
-            tags="${product.tags}"                  <!-- Array passed directly -->
-            onBuy="${this.handleProductPurchase}">  <!-- Function passed directly -->
-        </product-card>
-    `;
-}
-```
-
-### Security Note
-
-The framework includes security protections for props:
-- Reserved property names (constructor, __proto__, etc.) are blocked
-- URL attributes are sanitized automatically
-- JSON parsing failures fall back to strings safely
-
-## Template Helpers
-
-### `html` - Tagged Template Literal
-
-Main template function - automatically escapes content:
-
-```javascript
-template() {
-    return html`<div>${this.state.userInput}</div>`;
-}
-```
-
-### `when()` - Conditional Rendering
-
-**Always use `when()` instead of ternaries:**
+✅ **ALWAYS use `on-*` attributes** - Never use inline onclick or addEventListener in templates:
 
 ```javascript
 // ✅ CORRECT
-${when(this.state.isLoggedIn,
-    html`<p>Welcome!</p>`,
-    html`<p>Please log in</p>`
-)}
+<button on-click="handleClick">Click</button>
+<form on-submit-prevent="handleSubmit">...</form>
+<input type="text" on-change="handleChange">
 
 // ❌ WRONG
-${this.state.isLoggedIn ? html`<p>Welcome!</p>` : html`<p>Log in</p>`}
+<button onclick="handleClick()">Click</button>
 ```
 
-### `each()` - List Rendering
+**Available:** `on-click`, `on-change`, `on-submit`, `on-submit-prevent`, `on-input`, `on-mouseenter`, `on-mouseleave`
 
-```javascript
-${each(this.state.items, item => html`
-    <li>${item.name}</li>
-`)}
-```
+### 3. Two-Way Data Binding with `x-model`
 
-### `raw()` - Unsafe HTML
-
-Only use for trusted, sanitized content:
-
-```javascript
-${raw(this.state.trustedHtmlContent)}
-```
-
-## Two-Way Data Binding with `x-model`
-
-**`x-model` provides automatic two-way data binding for form inputs** - a feature that even React doesn't have! It automatically handles value binding and change events based on the input type.
-
-### Basic Usage
-
-Simply add `x-model="propertyName"` to any input element:
+**Automatic two-way binding** - a feature even React doesn't have:
 
 ```javascript
 data() {
@@ -569,315 +136,68 @@ data() {
 template() {
     return html`
         <input type="text" x-model="username">
-        <input type="number" x-model="age">
-        <input type="checkbox" x-model="agreed">
+        <input type="number" x-model="age">      <!-- Auto number conversion -->
+        <input type="checkbox" x-model="agreed">  <!-- Auto boolean -->
     `;
 }
 ```
 
-That's it! The framework automatically:
-- Binds the correct attribute (`value` or `checked`)
-- Sets up the correct event listener (`input` or `change`)
-- Updates `this.state.propertyName` when the input changes
-- Re-renders when state changes
-
-### Supported Input Types
-
-#### Text Inputs (text, email, password, url, etc.)
+**Chain with custom handlers:**
 ```javascript
-<input type="text" x-model="name">
-<input type="email" x-model="email">
-<textarea x-model="message"></textarea>
-```
-- Binds to `value` attribute
-- Listens to `input` event
-- Stores as string
-
-#### Number and Range Inputs
-```javascript
-<input type="number" x-model="count" min="1" max="100">
-<input type="range" x-model="volume" min="0" max="10">
-```
-- Binds to `value` attribute
-- Listens to `input` event
-- **Automatically converts to number** using `valueAsNumber`
-- Falls back to string if value is invalid
-
-#### Checkboxes
-```javascript
-<input type="checkbox" x-model="agreed">
-<input type="checkbox" x-model="receiveNewsletter">
-```
-- Binds to `checked` attribute
-- Listens to `change` event
-- Stores as boolean (`true`/`false`)
-
-#### Radio Buttons
-```javascript
-<input type="radio" name="size" value="small" x-model="selectedSize">
-<input type="radio" name="size" value="medium" x-model="selectedSize">
-<input type="radio" name="size" value="large" x-model="selectedSize">
-```
-- Binds to `checked` attribute
-- Listens to `change` event
-- Stores the `value` of the selected radio button
-- All radios should use the same state property
-
-#### Select Dropdowns
-```javascript
-<select x-model="country">
-    <option value="us">United States</option>
-    <option value="uk">United Kingdom</option>
-    <option value="ca">Canada</option>
-</select>
-```
-- Binds to `value` attribute
-- Listens to `input` event
-- Stores selected option's value
-
-#### File Inputs
-```javascript
-<input type="file" x-model="uploadedFiles">
-<input type="file" multiple x-model="uploadedFiles">
-```
-- No value binding (can't set file input values)
-- Listens to `change` event
-- Stores `FileList` object in state
-- Access files with `this.state.uploadedFiles[0]`, etc.
-
-### Complete Example
-
-```javascript
-export default defineComponent('registration-form', {
-    data() {
-        return {
-            username: '',
-            email: '',
-            age: 18,
-            country: 'us',
-            newsletter: false,
-            plan: 'free',
-            bio: ''
-        };
-    },
-
-    methods: {
-        async handleSubmit(e) {
-            e.preventDefault();
-
-            console.log('Form data:', {
-                username: this.state.username,
-                email: this.state.email,
-                age: this.state.age,          // Already a number!
-                country: this.state.country,
-                newsletter: this.state.newsletter,  // Already a boolean!
-                plan: this.state.plan,
-                bio: this.state.bio
-            });
-
-            // All values are ready to send - no parsing needed!
-            await api.register(this.state);
-        }
-    },
-
-    template() {
-        return html`
-            <form on-submit-prevent="handleSubmit">
-                <div>
-                    <label>Username: <input type="text" x-model="username"></label>
-                </div>
-
-                <div>
-                    <label>Email: <input type="email" x-model="email"></label>
-                </div>
-
-                <div>
-                    <label>Age: <input type="number" x-model="age" min="13" max="120"></label>
-                </div>
-
-                <div>
-                    <label>Country:
-                        <select x-model="country">
-                            <option value="us">United States</option>
-                            <option value="uk">United Kingdom</option>
-                            <option value="ca">Canada</option>
-                        </select>
-                    </label>
-                </div>
-
-                <div>
-                    <label>
-                        <input type="checkbox" x-model="newsletter">
-                        Subscribe to newsletter
-                    </label>
-                </div>
-
-                <div>
-                    <label>Plan:</label>
-                    <label><input type="radio" name="plan" value="free" x-model="plan"> Free</label>
-                    <label><input type="radio" name="plan" value="pro" x-model="plan"> Pro</label>
-                    <label><input type="radio" name="plan" value="enterprise" x-model="plan"> Enterprise</label>
-                </div>
-
-                <div>
-                    <label>Bio: <textarea x-model="bio"></textarea></label>
-                </div>
-
-                <button type="submit">Register</button>
-            </form>
-        `;
-    }
-});
+<input type="text" x-model="username" on-input="${() => this.clearError()}">
 ```
 
-### x-model vs Manual Binding
+**See [docs/templates.md](docs/templates.md) for complete x-model documentation.**
 
-**Without x-model** (verbose):
-```javascript
-<input
-    type="text"
-    value="${this.state.username}"
-    on-input="${(e) => { this.state.username = e.target.value; }}">
-```
-
-**With x-model** (concise):
-```javascript
-<input type="text" x-model="username">
-```
-
-### Benefits
-
-1. **Concise**: One attribute instead of two
-2. **Type-safe**: Automatic type conversion for numbers
-3. **Smart**: Uses correct attribute and event for each input type
-4. **Less error-prone**: No need to remember `value` vs `checked`, `input` vs `change`
-5. **Better DX**: Feels like Vue/Svelte but works without a build step
-
-### When NOT to Use x-model
-
-Use manual binding if you need:
-- **Value transformation**: `on-input="${(e) => { this.state.price = parseFloat(e.target.value) * 1.1; }}"`
-- **Validation**: Check value before updating state
-- **Debouncing**: Delay state updates
-- **Custom logic**: Any processing beyond simple assignment
+### 4. Template Helpers
 
 ```javascript
-// Manual binding for custom logic
-<input
-    type="text"
-    value="${this.state.search}"
-    on-input="${(e) => {
-        const value = e.target.value.trim().toLowerCase();
-        if (value.length >= 3) {
-            this.state.search = value;
-            this.performSearch();
-        }
-    }}">
+// html`` - Auto-escaped, XSS-safe
+html`<div>${this.state.userInput}</div>`
+
+// when() - Conditional rendering (use instead of ternaries)
+${when(this.state.isLoggedIn,
+    html`<p>Welcome!</p>`,
+    html`<p>Please log in</p>`
+)}
+
+// each() - List rendering
+${each(this.state.items, item => html`
+    <li>${item.name}</li>
+`)}
+
+// raw() - Only for trusted, sanitized content
+${raw(this.state.trustedHtmlContent)}
 ```
 
-### Using x-model with Custom Components
+### 5. Passing Props to Child Components
 
-**`x-model` now works with custom components!** Your custom component just needs to:
-
-1. Accept a `value` prop
-2. Emit a `change` event with the new value in `event.detail.value`
-
-**Example: Creating a reusable input component**
-
-```javascript
-export default defineComponent('my-input', {
-    props: {
-        value: '',
-        placeholder: ''
-    },
-
-    methods: {
-        handleInput(e) {
-            // Use emitChange helper - handles stopPropagation, prop update, and CustomEvent
-            this.emitChange(e, e.target.value);
-        }
-    },
-
-    template() {
-        return html`
-            <input
-                type="text"
-                value="${this.props.value}"
-                placeholder="${this.props.placeholder}"
-                on-input="handleInput">
-        `;
-    }
-});
-```
-
-**The `emitChange()` helper** handles all the boilerplate for you:
-- Calls `e.stopPropagation()` to prevent native event leakage
-- Updates `this.props.value` with the new value
-- Dispatches a CustomEvent with `detail: { value }` and proper bubbling
-
-**Manual approach** (if you need custom behavior):
-```javascript
-handleInput(e) {
-    e.stopPropagation();  // Stop native event
-    this.props.value = e.target.value;  // Update prop
-    this.dispatchEvent(new CustomEvent('change', {
-        bubbles: true,
-        composed: true,
-        detail: { value: e.target.value }
-    }));
-}
-```
-
-**Using it with x-model:**
+The framework **automatically** passes objects, arrays, and functions to custom elements without stringification:
 
 ```javascript
 template() {
     return html`
-        <form>
-            <!-- Simple! The framework handles the rest -->
-            <my-input x-model="username" placeholder="Enter username"></my-input>
-            <p>You typed: ${this.state.username}</p>
-        </form>
+        <!-- ✅ Arrays/objects/functions passed automatically -->
+        <x-select-box
+            options="${this.state.lengthOptions}"
+            value="${this.state.length}"
+            on-change="handleChange">
+        </x-select-box>
+
+        <!-- Methods are auto-bound - just pass them directly -->
+        <virtual-list
+            items="${this.state.items}"
+            renderItem="${this.handleItemRender}">
+        </virtual-list>
     `;
 }
 ```
 
-**What happens behind the scenes:**
+**See [docs/components.md](docs/components.md) for prop passing details.**
 
-1. Framework binds `value` prop to `this.state.username`
-2. Framework listens for `change` events
-3. When `change` fires, framework reads `e.detail.value` and updates `this.state.username`
-4. Component re-renders with new value
+### 6. Reactive State - CRITICAL
 
-**Important notes:**
-
-- For custom components, the framework uses the `change` event (not `input`). This follows the convention that `change` events signal completed changes, while `input` events signal ongoing typing.
-- **Use `this.emitChange(e, value)`** to emit change events - this helper automatically handles event propagation stopping, prop updates, and CustomEvent creation.
-- Parent components should only receive your CustomEvent with `e.detail.value`, never the underlying native events.
-
-## State Management
-
-### Reactive State
-
-State changes automatically trigger re-renders:
-
-```javascript
-data() {
-    return {
-        count: 0
-    };
-},
-
-methods: {
-    increment() {
-        this.state.count++; // Auto re-renders
-    }
-}
-```
-
-### ⚠️ CRITICAL: Array Mutations and Infinite Loops
-
-**NEVER mutate reactive arrays with methods like `.sort()`** - This causes infinite re-render loops!
+⚠️ **NEVER mutate reactive arrays with `.sort()`** - This causes infinite re-render loops!
 
 ```javascript
 // ✅ CORRECT - Create a copy before sorting
@@ -885,25 +205,16 @@ getSortedItems() {
     return [...this.state.items].sort((a, b) => a.time - b.time);
 }
 
-// ❌ WRONG - Mutates reactive array, triggers re-render loop!
+// ❌ WRONG - Infinite loop!
 getSortedItems() {
-    return this.state.items.sort((a, b) => a.time - b.time);  // INFINITE LOOP!
+    return this.state.items.sort((a, b) => a.time - b.time);
 }
 ```
-
-**Why?** When you call `.sort()` on a reactive array during rendering:
-1. Sort mutates the array
-2. Mutation triggers reactivity
-3. Reactivity triggers re-render
-4. Re-render calls your method again
-5. Loop repeats forever → Stack overflow
 
 **Safe methods** (return new arrays): `.filter()`, `.map()`, `.slice()`
 **Unsafe methods** (mutate in place): `.sort()`, `.reverse()`, `.splice()`
 
-### ⚠️ CRITICAL: Sets and Maps
-
-**Sets and Maps are NOT reactive!** Must reassign to trigger updates:
+⚠️ **Sets and Maps are NOT reactive** - Must reassign:
 
 ```javascript
 // ✅ CORRECT
@@ -912,14 +223,35 @@ addItem(item) {
     newSet.add(item);
     this.state.items = newSet;
 }
-
-// ❌ WRONG - Won't trigger re-render
-addItem(item) {
-    this.state.items.add(item);
-}
 ```
 
-### Stores
+**See [docs/reactivity.md](docs/reactivity.md) for complete reactivity guide.**
+
+### 7. Router
+
+```javascript
+import { Router } from './lib/router.js';
+
+const router = new Router({
+    '/': {
+        component: 'home-page',
+        load: () => import('./home.js')  // Optional lazy loading
+    },
+    '/admin/': {
+        component: 'admin-page',
+        require: 'admin'  // Capability check
+    }
+});
+```
+
+**Navigation:**
+```javascript
+<router-link to="/about/">About</router-link>
+```
+
+**See [docs/routing.md](docs/routing.md) for complete router documentation.**
+
+### 8. Stores
 
 Always call methods on `store.state`, not the original object:
 
@@ -942,416 +274,33 @@ unmounted() {
 }
 ```
 
-## Form Handling Pattern
-
-```javascript
-template() {
-    return html`
-        <form on-submit-prevent="handleSubmit">
-            <input type="text" id="username" value="${this.state.username}">
-            <input type="submit" value="Submit">
-        </form>
-    `;
-},
-
-methods: {
-    async handleSubmit(e) {
-        // preventDefault already called by on-submit-prevent
-        const input = this.querySelector('#username');
-        this.state.username = input.value;
-
-        await this.saveData();
-    }
-}
-
-// ✅ No afterRender() needed! Preact handles value syncing automatically
-```
-
-**For select dropdowns**, use `value` attribute and let Preact handle syncing:
-
-```javascript
-template() {
-    return html`
-        <select on-change="handleChange" value="${this.state.selected}">
-            <option value="opt1">Option 1</option>
-            <option value="opt2">Option 2</option>
-        </select>
-    `;
-},
-
-methods: {
-    handleChange(e) {
-        this.state.selected = e.target.value;
-    }
-}
-```
-
-## Router
-
-Routes are defined in `app.js`:
-
-```javascript
-const router = new Router({
-    '/': {
-        component: 'home-page'
-    },
-    '/admin/': {
-        component: 'admin-page',
-        require: 'admin'  // Capability check
-    }
-});
-```
-
-Use `router-link` for navigation:
-
-```javascript
-<router-link to="/about/">About</router-link>
-```
-
-### Lazy Loading Routes (Optional)
-
-For better performance, routes can be lazy-loaded using dynamic imports. This improves Time to First Contentful Paint by only loading the requested route initially:
-
-```javascript
-const router = new Router({
-    '/': {
-        component: 'home-page',
-        load: () => import('./home.js')  // Lazy load on demand
-    },
-    '/admin/': {
-        component: 'admin-page',
-        require: 'admin',
-        load: () => import('./admin.js')  // Component loads its own dependencies
-    }
-});
-```
-
-**How it works:**
-1. When a route is visited for the first time, the router calls the `load` function
-2. The component module is dynamically imported
-3. Component is cached in `router.loadedComponents` Set
-4. Subsequent visits to the same route are instant (no re-download)
-
-**Benefits:**
-- Only the initial route loads on page load
-- Other routes load on-demand when navigated to
-- Components manage their own dependencies via import statements
-- ES module caching ensures no duplicate downloads
-
-**Component dependencies:**
-Each lazy-loaded component should import its own dependencies:
-
-```javascript
-// In home.js
-import { defineComponent } from './lib/framework.js';
-import './components/tiles.js';     // Component imports what it needs
-import './auth/user-tools.js';
-
-export default defineComponent('home-page', {
-    // ...
-});
-```
-
-The browser's ES module system automatically caches all imports, so there's no performance penalty for components importing their dependencies.
-
-## Dark Theme
-
-```javascript
-import { darkTheme } from './lib/utils.js';
-
-// Toggle
-darkTheme.update(s => ({ enabled: !s.enabled }));
-
-// In styles
-styles: `
-    :host-context(body.dark) .element {
-        background: #333;
-        color: #ccc;
-    }
-`
-```
-
-## Notifications
-
-```javascript
-import { notify } from './lib/utils.js';
-
-methods: {
-    async save() {
-        try {
-            await this.saveData();
-            notify('Saved!', 'info', 3); // message, severity, seconds
-        } catch (error) {
-            notify('Error!', 'error', 5);
-        }
-    }
-}
-```
-
-## Testing
-
-Located in `/app/tests/`. Tests auto-run on page load.
-
-```javascript
-import { describe, assert } from './test-runner.js';
-
-describe('My Tests', function(it) {
-    it('does something', async () => {
-        const result = await doSomething();
-        assert.equal(result, expected, 'Should match');
-    });
-});
-```
-
-## Common Patterns
-
-### Loading Data
-
-```javascript
-data() {
-    return {
-        items: [],
-        loading: false
-    };
-},
-
-async mounted() {
-    this.state.loading = true;
-    try {
-        const response = await fetch('/api/items');
-        this.state.items = await response.json();
-    } catch (error) {
-        console.error('Failed to load:', error);
-    } finally {
-        this.state.loading = false;
-    }
-}
-```
-
-### Select Boxes with Custom Components
-
-Use inline event handlers - no afterRender() needed:
-
-```javascript
-template() {
-    return html`
-        <x-select-box
-            value="${this.state.selected}"
-            options="${this.state.options}"
-            on-change="${(e) => { this.state.selected = e.detail.value; }}">
-        </x-select-box>
-    `;
-}
-
-// ✅ No afterRender() needed!
-```
-
-**Note:** Custom components like `x-select-box` emit CustomEvents with `detail: { value }`. They automatically stop propagation of native events, so you'll only receive the clean CustomEvent.
-
-**For native select elements**, use value attribute and on-change:
-
-```javascript
-template() {
-    return html`
-        <select on-change="handleChange" value="${this.state.selected}">
-            ${each(this.state.options, opt => html`
-                <option value="${opt}">${opt}</option>
-            `)}
-        </select>
-    `;
-},
-
-methods: {
-    handleChange(e) {
-        this.state.selected = e.target.value;
-    }
-}
-```
-
-## Security Best Practices
-
-The framework has built-in security protections with defense-in-depth:
-
-### Security Architecture
-
-1. **Symbol-based trust markers**: The framework uses non-exported Symbols for `html` and `raw` markers, preventing JSON injection attacks
-2. **Context-aware escaping**: Automatic XSS protection based on interpolation context
-3. **toString() attack prevention**: Uses `Object.prototype.toString.call()` to prevent malicious custom toString() methods from executing
-4. **Attribute sanitization**: URL validation, boolean attribute handling, and dangerous attribute blocking
-
-### 1. XSS Protection
-
-**Always use `html` tag** - Automatic context-aware escaping:
-
-```javascript
-// ✅ CORRECT - Auto-escaped
-template() {
-    return html`<div>${this.state.userInput}</div>`;
-}
-
-// ❌ WRONG - XSS vulnerable
-template() {
-    const html = `<div>${this.state.userInput}</div>`;
-    return raw(html);
-}
-```
-
-**Use `raw()` only for trusted content** from your own backend:
-
-```javascript
-// ✅ SAFE - Backend-generated HTML
-${raw(this.state.passwordGeneratorResponse)}
-
-// ❌ DANGEROUS - User input
-${raw(this.state.userComment)}  // XSS!
-```
-
-### 2. Dynamic Content and Boolean Attributes
-
-**Use the template system for all dynamic content**:
-
-```javascript
-// ✅ CORRECT - Let the framework handle escaping
-template() {
-    return html`
-        <select>
-            ${each(items, item => {
-                const selected = item.id === this.state.selectedId ? 'selected' : '';
-                return html`<option value="${item.id}" ${selected}>${item.name}</option>`;
-            })}
-        </select>
-    `;
-}
-
-// ❌ WRONG - Manual string building with raw() is dangerous
-const optionsHtml = items.map(item => {
-    const escapedName = item.name.replace(/"/g, '&quot;'); // Easy to miss escaping!
-    return `<option value="${item.id}">${escapedName}</option>`;
-}).join('');
-return html`<select>${raw(optionsHtml)}</select>`; // XSS if escaping is incomplete!
-```
-
-**Conditional Boolean Attributes**:
-
-Use `true`/`undefined` in attribute values for clean conditional rendering:
-
-```javascript
-// ✅ CORRECT - Boolean attributes in attribute value context
-const selected = item.id === selectedId ? true : undefined;
-html`<option selected="${selected}">${item.name}</option>`
-
-const disabled = isLoading ? true : undefined;
-html`<button disabled="${disabled}">Submit</button>`
-
-// Also works in each()
-${each(items, item => {
-    const selected = item.id === this.state.selectedId ? true : undefined;
-    return html`<option value="${item.id}" selected="${selected}">${item.name}</option>`;
-})}
-```
-
-When the value is `true`, the attribute is added with an empty value (`selected=""`). When `undefined` or `false`, the attribute is removed entirely.
-
-**IMPORTANT**: String values like `"true"` or `"false"` are treated as regular strings, not booleans:
-- `selected="${true}"` → `<option selected="">` (boolean true)
-- `selected="${'true'}"` → `<option selected="true">` (string "true")
-
-The `html` template tag provides automatic context-aware escaping. Always use it instead of manual string concatenation.
-
-### 3. Event Handler Security
-
-**Never pass user input to event attributes**:
-
-```javascript
-// ❌ DANGEROUS - Allows script injection
-<button on-click="${this.state.userHandler}">
-
-// ✅ CORRECT - Use method names only
-<button on-click="handleClick">
-```
-
-### 4. CSRF Protection
-
-The framework includes CSRF token support. Add to your HTML:
-
-```html
-<meta name="csrf-token" content="YOUR_TOKEN_HERE">
-```
-
-All `fetchJSON()` calls automatically include this token.
-
-### 5. Input Validation
-
-**Always validate user input** before API calls:
-
-```javascript
-methods: {
-    async saveEmail(e) {
-        e.preventDefault();
-
-        const email = this.state.email.trim();
-        if (!this.isValidEmail(email)) {
-            notify('Invalid email address', 'error');
-            return;
-        }
-
-        await api.updateEmail(email);
-    },
-
-    isValidEmail(email) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    }
-}
-```
-
-### 6. Sensitive Data Storage
-
-**Never store sensitive data in localStorage**:
-
-```javascript
-// ❌ WRONG - Plaintext tokens exposed
-localStore('authToken', token);
-
-// ✅ CORRECT - Session-only storage
-sessionStorage.setItem('authToken', token);
-```
-
-### 7. Memory Leak Prevention
-
-The framework automatically cleans up event listeners, but you must clean up subscriptions:
-
-```javascript
-mounted() {
-    this._interval = setInterval(() => this.refresh(), 60000);
-    this.unsubscribe = store.subscribe(state => {
-        this.state.data = state.data;
-    });
-},
-
-unmounted() {
-    // ✅ REQUIRED - Clean up to prevent leaks
-    if (this._interval) clearInterval(this._interval);
-    if (this.unsubscribe) this.unsubscribe();
-}
-```
-
-## Migration from Svelte (`/src/` → `/app/`)
-
-| Svelte | Custom Framework |
-|--------|------------------|
-| `on:click` / `@click` | `on-click` |
-| `bind:value` | Manual sync in `afterRender()` |
-| `{#if}` | `when(condition, then, else)` |
-| `{#each}` | `each(items, item => ...)` |
-| `{@html}` | `raw(content)` |
-| `$store` | `store.state` |
-| `export let prop` | `props: { prop: default }` |
-
-## Migration Complete
-
-The original Svelte implementation has been fully migrated to the vanilla JavaScript framework in `/app/`. All legacy code (`/src/`, npm dependencies, build tools) has been removed.
-
-The framework requires no build step - it runs directly in the browser using ES6 modules.
+## Key Conventions
+
+1. **Use `x-model` for form inputs** - One attribute for two-way binding
+2. **Use `on-*` for ALL event binding** - Never use inline handlers or addEventListener
+3. **Use `when()` and `each()`** - Not ternaries or manual loops
+4. **Never mutate reactive arrays** - Use `[...array].sort()`, not `array.sort()`
+5. **Call store methods on `.state`** - `store.state.method()`, not `store.method()`
+6. **Reassign Sets/Maps** - They're not reactive otherwise
+7. **Clean up in `unmounted()`** - Unsubscribe from stores, clear timers
+8. **Validate user input** - Always validate before API calls
+9. **Handle errors properly** - Don't let errors fail silently
+10. **Use descriptive names** - No abbreviations or single letters
+
+## Documentation
+
+For detailed information, see:
+
+- **[docs/components.md](docs/components.md)** - Component development patterns, props, lifecycle
+- **[docs/templates.md](docs/templates.md)** - Template system, x-model, helpers, event binding
+- **[docs/reactivity.md](docs/reactivity.md)** - Reactive state, stores, computed properties
+- **[docs/routing.md](docs/routing.md)** - Router setup, lazy loading, navigation
+- **[docs/security.md](docs/security.md)** - XSS protection, input validation, CSRF
+- **[docs/testing.md](docs/testing.md)** - Running tests, writing tests, test structure
+- **[docs/bundles.md](docs/bundles.md)** - Using pre-bundled framework versions
+- **[docs/api-reference.md](docs/api-reference.md)** - Complete API reference
+
+For project overview and quickstart, see [README.md](README.md).
 
 ## Backend (SWAPI Server)
 
@@ -1366,186 +315,52 @@ Python-based web API framework built on Werkzeug:
 - Role hierarchy and capability system
 - SQLAlchemy database backend
 
-### Backend Apps
+## Common Anti-Patterns to Avoid
 
-- **HRemote**: Philips Hue control, home automation (requires `root`)
-
-## Coding Best Practices
-
-### Naming Conventions
+### ❌ Don't use afterRender() for value syncing or event binding
 
 ```javascript
-// ✅ Component names: kebab-case for custom elements
-defineComponent('user-profile', { ... })
-defineComponent('x-select-box', { ... })  // x- prefix for reusable UI components
-
-// ✅ Methods: descriptive camelCase
-methods: {
-    loadUserData() { ... },
-    handleFormSubmit() { ... },
-    updateUserProfile() { ... }
+// ❌ WRONG - Preact handles value syncing automatically
+afterRender() {
+    const select = this.querySelector('select');
+    select.value = this.state.selected;
 }
 
-// ❌ Avoid abbreviations
-methods: {
-    upd() { ... },          // Bad: unclear
-    ld() { ... },           // Bad: cryptic
-    hdlClick() { ... }      // Bad: hard to read
-}
-
-// ✅ Private properties: underscore prefix
-this._interval = setInterval(...);
-this._cleanups = [];
-this._unsubscribe = null;
-```
-
-### Error Handling
-
-```javascript
-// ✅ CORRECT - Proper error handling
-methods: {
-    async loadData() {
-        try {
-            this.state.loading = true;
-            const data = await api.getData();
-            this.state.items = data;
-        } catch (error) {
-            console.error('[MyComponent] Failed to load data:', error);
-            notify(`Error: ${error.message}`, 'error');
-            this.state.items = [];  // Fallback state
-        } finally {
-            this.state.loading = false;
-        }
-    }
-}
-
-// ❌ WRONG - Silent failure
-methods: {
-    async loadData() {
-        const data = await api.getData();  // No error handling!
-        this.state.items = data;
-    }
+// ❌ WRONG - Use on-* attributes instead
+afterRender() {
+    this.querySelector('button').addEventListener('click', this.handleClick);
 }
 ```
 
-### Constants Over Magic Numbers
+### ❌ Don't manually bind methods
 
 ```javascript
-// ✅ CORRECT
-const REFRESH_INTERVAL_MS = 60 * 1000;  // 1 minute
-const MAX_RETRIES = 3;
-const TIMEOUT_SECONDS = 30;
-
+// ❌ WRONG - Methods are already auto-bound
 mounted() {
-    this._interval = setInterval(() => this.refresh(), REFRESH_INTERVAL_MS);
+    this._boundRender = this.handleRender.bind(this);
 }
 
-// ❌ WRONG
-mounted() {
-    this._interval = setInterval(() => this.refresh(), 60000);  // What is 60000?
+// ✅ CORRECT - Just pass the method directly
+template() {
+    return html`
+        <virtual-list renderItem="${this.handleRender}">
+    `;
 }
 ```
 
-### Avoid Code Duplication
+### ❌ Don't stringify objects for custom components
 
 ```javascript
-// ✅ CORRECT - Reusable error handler
-methods: {
-    async safeApiCall(apiMethod, errorMessage) {
-        try {
-            return await apiMethod();
-        } catch (error) {
-            console.error(errorMessage, error);
-            notify(errorMessage, 'error');
-            throw error;
-        }
-    },
+// ❌ WRONG - Framework does it automatically
+<x-select-box options="${JSON.stringify(this.state.options)}">
 
-    async loadUsers() {
-        await this.safeApiCall(
-            () => api.getUsers(),
-            'Failed to load users'
-        );
-    },
-
-    async saveUser() {
-        await this.safeApiCall(
-            () => api.saveUser(this.state.user),
-            'Failed to save user'
-        );
-    }
-}
-
-// ❌ WRONG - Repeated error handling
-methods: {
-    async loadUsers() {
-        try {
-            return await api.getUsers();
-        } catch (error) {
-            console.error('Failed to load', error);
-            notify('Failed to load', 'error');
-        }
-    },
-
-    async saveUser() {
-        try {
-            return await api.saveUser(this.state.user);
-        } catch (error) {
-            console.error('Failed to save', error);
-            notify('Failed to save', 'error');
-        }
-    }
-}
+// ✅ CORRECT - Just pass the object
+<x-select-box options="${this.state.options}">
 ```
-
-### Documentation
-
-```javascript
-/**
- * User Profile Component
- *
- * Displays and edits user profile information with validation.
- *
- * Props:
- *   - userId: ID of the user to display (required)
- *   - editable: Whether profile can be edited (default: false)
- *
- * Events:
- *   - save: Emitted when profile is successfully saved
- *   - cancel: Emitted when user cancels editing
- *
- * @example
- * <user-profile userId="123" editable="true"></user-profile>
- */
-export default defineComponent('user-profile', {
-    props: {
-        userId: '',
-        editable: false
-    },
-    // ...
-});
-```
-
-## Key Conventions
-
-1. **Use `x-model` for form inputs** - One attribute for two-way binding instead of value + on-input
-2. **Use `on-*` for ALL event binding** - Never use inline handlers or addEventListener
-3. **Use `when()` and `each()`** - Not ternaries or manual loops
-4. **Never mutate reactive arrays** - Use `[...array].sort()`, not `array.sort()` (prevents infinite loops)
-5. **Call store methods on `.state`** - `login.state.logoff()`, not `login.logoff()`
-6. **Reassign Sets/Maps** - They're not reactive otherwise
-7. **Avoid `afterRender()` anti-patterns** - Don't use for value syncing or event binding (Preact handles this)
-8. **Clean up in `unmounted()`** - Unsubscribe from stores, clear timers
-9. **Validate user input** - Always validate before API calls
-10. **Handle errors properly** - Don't let errors fail silently
-11. **Use descriptive names** - No abbreviations or single letters
-12. **Add JSDoc comments** - Document component purpose, props, and events
-13. **Use constants** - No magic numbers or strings
 
 ## Getting Help
 
 - Check `/app/tests/` for working examples
 - Review `/app/core/` for framework APIs
 - See `/app/components/` for component patterns
-- Read this CLAUDE.md for conventions
-- Security audit results in project documentation
+- Read the docs/ folder for detailed information

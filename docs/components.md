@@ -1,0 +1,636 @@
+# Component Development
+
+Complete guide to building components with the framework.
+
+## Table of Contents
+
+- [Basic Component Pattern](#basic-component-pattern)
+- [Props System](#props-system)
+- [Passing Props to Child Components](#passing-props-to-child-components)
+- [Lifecycle Hooks](#lifecycle-hooks)
+- [Component Styles](#component-styles)
+- [Best Practices](#best-practices)
+
+## Basic Component Pattern
+
+```javascript
+import { defineComponent, html, when, each } from './lib/framework.js';
+
+export default defineComponent('my-component', {
+    // Props (attributes) - automatically observed
+    props: {
+        title: 'Default Title',
+        count: 0
+    },
+
+    // Local reactive state
+    data() {
+        return {
+            message: 'Hello',
+            items: []
+        };
+    },
+
+    // Lifecycle: called after component is added to DOM
+    mounted() {
+        this.loadData();
+    },
+
+    // Lifecycle: called after each render
+    // ⚠️ Often unnecessary with Preact - use only when needed for DOM manipulation
+    afterRender() {
+        // Use only for: imperative DOM APIs, third-party library integration
+        // NOT for: syncing values (Preact handles this), event binding (use on-*)
+    },
+
+    // Lifecycle: called before component is removed
+    unmounted() {
+        // Cleanup subscriptions, timers
+    },
+
+    // Methods accessible via this.methodName()
+    methods: {
+        async loadData() {
+            this.state.items = await fetchData();
+        },
+
+        handleClick(e) {
+            e.preventDefault();
+            this.state.message = 'Clicked!';
+        }
+    },
+
+    // Template using tagged template literals
+    template() {
+        return html`
+            <div class="container">
+                <h1>${this.props.title}</h1>
+                <p>${this.state.message}</p>
+                <button on-click="handleClick">Click Me</button>
+            </div>
+        `;
+    },
+
+    // Scoped styles (using component tag name prefix)
+    styles: `
+        .container {
+            padding: 20px;
+        }
+
+        /* Styles are automatically scoped to component tag name */
+        button {
+            background: #007bff;
+            color: white;
+        }
+    `
+});
+```
+
+## Props System
+
+Components can define props that are reactive and can be set via HTML attributes or programmatically. **All props support full reactivity** - changes trigger automatic re-renders.
+
+### Defining Props
+
+Define props in the component definition with default values:
+
+```javascript
+export default defineComponent('user-card', {
+    props: {
+        username: '',           // String prop
+        userId: 0,              // Number prop
+        tags: [],               // Array prop
+        onSave: null           // Function prop
+    },
+
+    template() {
+        // Access props via this.props
+        return html`
+            <div class="card">
+                <h2>${this.props.username}</h2>
+                <p>ID: ${this.props.userId}</p>
+                <p>Tags: ${this.props.tags.join(', ')}</p>
+            </div>
+        `;
+    }
+});
+```
+
+### Setting Props - Three Ways
+
+**1. HTML Attributes (Textual Props)**
+
+Props can be set via regular HTML attributes. The framework automatically parses JSON values:
+
+```html
+<!-- In HTML or at root level -->
+<user-card username="alice" userId="123"></user-card>
+
+<!-- Parsed as: username="alice" (string), userId=123 (number via JSON.parse) -->
+```
+
+**How it works:**
+- All props are automatically registered as `observedAttributes`
+- Attribute values are parsed as JSON first, falling back to strings
+- Changes to attributes after mount trigger re-renders via `attributeChangedCallback`
+
+**2. JavaScript Properties**
+
+Props can be set programmatically, triggering automatic re-renders:
+
+```javascript
+const card = document.querySelector('user-card');
+card.username = 'bob';              // ✅ Triggers re-render
+card.userId = 456;                  // ✅ Triggers re-render
+card.tags = ['admin', 'developer']; // ✅ Triggers re-render
+```
+
+**How it works:**
+- Framework creates property descriptors for each prop
+- Setting `el.propName = value` updates `el.props.propName` and triggers re-render
+- Works at any time (before or after mount)
+
+**3. From Parent Templates**
+
+When passed from a parent component template, complex types are passed by reference:
+
+```javascript
+// Parent component
+template() {
+    return html`
+        <user-card
+            username="${this.state.currentUser}"
+            userId="${this.state.userId}"
+            tags="${this.state.userTags}"           <!-- Array passed directly -->
+            onSave="${this.handleSave}">            <!-- Function passed directly -->
+        </user-card>
+    `;
+}
+```
+
+**How it works:**
+- Framework detects custom elements (tags with hyphens)
+- Objects/arrays/functions are passed via property assignment, not stringified
+- Strings/numbers are passed as strings (parsed by child component)
+
+### Reactivity Guarantees
+
+**All these trigger re-renders:**
+```javascript
+// Via setAttribute
+el.setAttribute('username', 'charlie');
+
+// Via property setter
+el.username = 'charlie';
+
+// Via direct prop mutation (if reactive)
+el.props.username = 'charlie';
+
+// From parent re-render (automatic)
+```
+
+### Complete Example
+
+```javascript
+// Define component with props
+export default defineComponent('product-card', {
+    props: {
+        name: '',
+        price: 0,
+        inStock: true,
+        tags: [],
+        onBuy: null
+    },
+
+    methods: {
+        handleBuyClick() {
+            if (this.props.onBuy) {
+                this.props.onBuy(this.props.name, this.props.price);
+            }
+        }
+    },
+
+    template() {
+        return html`
+            <div class="product">
+                <h3>${this.props.name}</h3>
+                <p class="price">$${this.props.price}</p>
+                <p class="stock">${this.props.inStock ? 'In Stock' : 'Out of Stock'}</p>
+                <p class="tags">${this.props.tags.join(', ')}</p>
+                <button on-click="handleBuyClick" disabled="${!this.props.inStock}">
+                    Buy Now
+                </button>
+            </div>
+        `;
+    }
+});
+
+// Use in HTML (textual props)
+<product-card name="Widget" price="29.99" inStock="true"></product-card>
+
+// Use programmatically
+const card = document.createElement('product-card');
+card.name = 'Gadget';
+card.price = 49.99;
+card.inStock = true;
+card.tags = ['electronics', 'new'];
+card.onBuy = (name, price) => console.log(`Buying ${name} for $${price}`);
+document.body.appendChild(card);
+
+// Use in parent template
+template() {
+    return html`
+        <product-card
+            name="${product.name}"
+            price="${product.price}"
+            inStock="${product.inStock}"
+            tags="${product.tags}"                  <!-- Array passed directly -->
+            onBuy="${this.handleProductPurchase}">  <!-- Function passed directly -->
+        </product-card>
+    `;
+}
+```
+
+### Security Note
+
+The framework includes security protections for props:
+- Reserved property names (constructor, __proto__, etc.) are blocked
+- URL attributes are sanitized automatically
+- JSON parsing failures fall back to strings safely
+
+## Passing Props to Child Components
+
+### Automatic Object/Function Passing for Custom Elements
+
+The framework **automatically** passes objects, arrays, and functions to custom elements (Web Components) without stringification. Just use regular `${}` interpolation:
+
+```javascript
+template() {
+    return html`
+        <!-- ✅ CORRECT - Arrays/objects/functions passed automatically -->
+        <x-select-box
+            options="${this.state.lengthOptions}"
+            value="${this.state.length}"
+            on-change="handleChange">
+        </x-select-box>
+
+        <!-- ✅ Functions work too! -->
+        <virtual-list
+            items="${this.state.items}"
+            renderItem="${this._boundRenderItem}">
+        </virtual-list>
+    `;
+}
+```
+
+**How it works:**
+- Framework detects custom elements (tags with hyphens like `x-select-box`)
+- For custom element attributes, objects/arrays/functions are passed by reference automatically
+- For native HTML elements (`<input>`, `<div>`, etc.), values are converted to strings as normal
+- You can pass any JavaScript expression: `"${this.state.items.filter(x => x.active)}"`
+
+### Examples
+
+```javascript
+methods: {
+    handleItemRender(item, index) {
+        return html`<div>${item.name}</div>`;
+    }
+},
+
+template() {
+    return html`
+        <!-- Custom elements: objects/functions passed automatically -->
+        <x-select-box options="${this.state.options}"></x-select-box>
+        <my-list items="${this.getFilteredItems()}"></my-list>
+        <data-table rows="${this.state.rows}" config="${{ sortable: true }}"></data-table>
+
+        <!-- Methods are auto-bound - just pass them directly! -->
+        <virtual-list items="${this.state.items}" renderItem="${this.handleItemRender}"></virtual-list>
+
+        <!-- Native HTML: values converted to strings -->
+        <input value="${this.state.username}">
+        <div data-count="${this.state.count}"></div>
+    `;
+}
+```
+
+**Important:** Methods are **automatically bound** to the component instance in the constructor. Just pass them directly like `this.methodName` - no manual binding needed!
+
+### ❌ Don't Use JSON.stringify or Manual Binding
+
+```javascript
+// ❌ WRONG - Don't stringify (framework does it automatically)
+<x-select-box options="${JSON.stringify(this.state.options)}">
+
+// ❌ WRONG - Don't manually bind (methods are already bound!)
+mounted() {
+    this._boundRender = this.handleRender.bind(this);
+}
+
+// ✅ CORRECT - Just pass the method directly
+template() {
+    return html`
+        <virtual-list renderItem="${this.handleRender}">
+    `;
+}
+
+// ❌ WRONG - Don't manually set props in afterRender
+afterRender() {
+    this.querySelector('x-select-box').props.options = this.state.options;
+}
+```
+
+## Lifecycle Hooks
+
+### mounted()
+
+Called after component is added to DOM. Perfect for:
+- Loading initial data
+- Setting up subscriptions
+- Starting timers/intervals
+- Third-party library initialization
+
+```javascript
+mounted() {
+    this.state.loading = true;
+    this.fetchData().then(data => {
+        this.state.items = data;
+        this.state.loading = false;
+    });
+
+    // Subscribe to store
+    this.unsubscribe = myStore.subscribe(state => {
+        this.state.data = state.data;
+    });
+}
+```
+
+### unmounted()
+
+Called before component is removed from DOM. **CRITICAL for cleanup:**
+- Unsubscribe from stores
+- Clear timers/intervals
+- Remove global event listeners
+- Clean up third-party libraries
+
+```javascript
+unmounted() {
+    // ✅ REQUIRED - Clean up to prevent memory leaks
+    if (this._interval) clearInterval(this._interval);
+    if (this.unsubscribe) this.unsubscribe();
+}
+```
+
+### afterRender()
+
+Called after each render. **Use sparingly** - Preact handles most DOM sync automatically.
+
+**When to use:**
+- Imperative DOM APIs (focus, scroll position)
+- Third-party library integration (charts, maps)
+- Reading DOM measurements
+
+**When NOT to use:**
+- ❌ Value syncing (Preact handles this)
+- ❌ Event binding (use `on-*` attributes)
+- ❌ Setting select values (use `value` attribute)
+
+```javascript
+// ✅ CORRECT - Focus input after render
+afterRender() {
+    if (this.state.shouldFocus) {
+        this.querySelector('input').focus();
+        this.state.shouldFocus = false;
+    }
+}
+
+// ❌ WRONG - Preact handles value syncing automatically
+afterRender() {
+    this.querySelector('select').value = this.state.selected;
+}
+
+// ❌ WRONG - Use on-* attributes instead
+afterRender() {
+    this.querySelector('button').addEventListener('click', this.handleClick);
+}
+```
+
+## Component Styles
+
+Styles are automatically scoped to the component tag name:
+
+```javascript
+defineComponent('my-button', {
+    template() {
+        return html`
+            <button class="primary">Click Me</button>
+        `;
+    },
+
+    styles: `
+        /* Scoped to my-button */
+        .primary {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .primary:hover {
+            background: #0056b3;
+        }
+
+        /* Use :host for component root */
+        :host {
+            display: block;
+            margin: 10px 0;
+        }
+
+        /* Dark theme support */
+        :host-context(body.dark) .primary {
+            background: #444;
+            color: #ccc;
+        }
+    `
+});
+```
+
+## Best Practices
+
+### Naming Conventions
+
+```javascript
+// ✅ Component names: kebab-case for custom elements
+defineComponent('user-profile', { ... })
+defineComponent('x-select-box', { ... })  // x- prefix for reusable UI components
+
+// ✅ Methods: descriptive camelCase
+methods: {
+    loadUserData() { ... },
+    handleFormSubmit() { ... },
+    updateUserProfile() { ... }
+}
+
+// ❌ Avoid abbreviations
+methods: {
+    upd() { ... },          // Bad: unclear
+    ld() { ... },           // Bad: cryptic
+    hdlClick() { ... }      // Bad: hard to read
+}
+
+// ✅ Private properties: underscore prefix
+this._interval = setInterval(...);
+this._cleanups = [];
+this._unsubscribe = null;
+```
+
+### Error Handling
+
+```javascript
+// ✅ CORRECT - Proper error handling
+methods: {
+    async loadData() {
+        try {
+            this.state.loading = true;
+            const data = await api.getData();
+            this.state.items = data;
+        } catch (error) {
+            console.error('[MyComponent] Failed to load data:', error);
+            notify(`Error: ${error.message}`, 'error');
+            this.state.items = [];  // Fallback state
+        } finally {
+            this.state.loading = false;
+        }
+    }
+}
+
+// ❌ WRONG - Silent failure
+methods: {
+    async loadData() {
+        const data = await api.getData();  // No error handling!
+        this.state.items = data;
+    }
+}
+```
+
+### Loading Data Pattern
+
+```javascript
+data() {
+    return {
+        items: [],
+        loading: false,
+        error: null
+    };
+},
+
+async mounted() {
+    this.state.loading = true;
+    this.state.error = null;
+
+    try {
+        const response = await fetch('/api/items');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        this.state.items = await response.json();
+    } catch (error) {
+        console.error('Failed to load:', error);
+        this.state.error = error.message;
+    } finally {
+        this.state.loading = false;
+    }
+},
+
+template() {
+    return html`
+        ${when(this.state.loading,
+            html`<p>Loading...</p>`,
+            when(this.state.error,
+                html`<p class="error">Error: ${this.state.error}</p>`,
+                html`<ul>${each(this.state.items, item => html`
+                    <li>${item.name}</li>
+                `)}</ul>`
+            )
+        )}
+    `;
+}
+```
+
+### Documentation
+
+```javascript
+/**
+ * User Profile Component
+ *
+ * Displays and edits user profile information with validation.
+ *
+ * Props:
+ *   - userId: ID of the user to display (required)
+ *   - editable: Whether profile can be edited (default: false)
+ *
+ * Events:
+ *   - save: Emitted when profile is successfully saved
+ *   - cancel: Emitted when user cancels editing
+ *
+ * @example
+ * <user-profile userId="123" editable="true"></user-profile>
+ */
+export default defineComponent('user-profile', {
+    props: {
+        userId: '',
+        editable: false
+    },
+    // ...
+});
+```
+
+## Common Patterns
+
+### Select Boxes with Custom Components
+
+Use inline event handlers - no afterRender() needed:
+
+```javascript
+template() {
+    return html`
+        <x-select-box
+            value="${this.state.selected}"
+            options="${this.state.options}"
+            on-change="${(e) => { this.state.selected = e.detail.value; }}">
+        </x-select-box>
+    `;
+}
+
+// ✅ No afterRender() needed!
+```
+
+**Note:** Custom components like `x-select-box` emit CustomEvents with `detail: { value }`. They automatically stop propagation of native events, so you'll only receive the clean CustomEvent.
+
+### For Native Select Elements
+
+Use value attribute and on-change:
+
+```javascript
+template() {
+    return html`
+        <select on-change="handleChange" value="${this.state.selected}">
+            ${each(this.state.options, opt => html`
+                <option value="${opt}">${opt}</option>
+            `)}
+        </select>
+    `;
+},
+
+methods: {
+    handleChange(e) {
+        this.state.selected = e.target.value;
+    }
+}
+```
+
+## See Also
+
+- [templates.md](templates.md) - Template system, x-model, event binding
+- [reactivity.md](reactivity.md) - Reactive state management
+- [api-reference.md](api-reference.md) - Complete API reference
