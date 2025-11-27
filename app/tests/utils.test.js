@@ -16,7 +16,7 @@ import {
     relativeTime,
     localStore,
     darkTheme
-} from '../core/utils.js';
+} from '../lib/utils.js';
 
 describe('Utility Functions', function(it) {
     it('sleep() delays execution', async () => {

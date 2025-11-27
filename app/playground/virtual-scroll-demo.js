@@ -1,8 +1,8 @@
 /**
  * Virtual Scrolling Demo - Demonstrates performance with large lists
  */
-import { defineComponent } from '../core/component.js';
-import { html, each, when } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each, when } from '../lib/framework.js';
 import '../components/virtual-list.js';
 
 export default defineComponent('virtual-scroll-demo', {

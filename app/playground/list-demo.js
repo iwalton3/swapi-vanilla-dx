@@ -1,8 +1,8 @@
 /**
  * List Demo - Demonstrates list rendering and manipulation
  */
-import { defineComponent } from '../core/component.js';
-import { html, each, when } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each, when } from '../lib/framework.js';
 
 export default defineComponent('list-demo', {
     data() {

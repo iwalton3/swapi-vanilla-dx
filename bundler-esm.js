@@ -22,26 +22,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Files to bundle (in loose order - will be sorted by dependencies)
 const FILES_TO_BUNDLE = [
     // Preact
-    'app/vendor/preact/constants.js',
-    'app/vendor/preact/util.js',
-    'app/vendor/preact/options.js',
-    'app/vendor/preact/component.js',
-    'app/vendor/preact/create-element.js',
-    'app/vendor/preact/clone-element.js',
-    'app/vendor/preact/create-context.js',
-    'app/vendor/preact/diff/catch-error.js',
-    'app/vendor/preact/diff/props.js',
-    'app/vendor/preact/diff/children.js',
-    'app/vendor/preact/diff/index.js',
-    'app/vendor/preact/render.js',
-    'app/vendor/preact/index.js',
+    'app/lib/vendor/preact/constants.js',
+    'app/lib/vendor/preact/util.js',
+    'app/lib/vendor/preact/options.js',
+    'app/lib/vendor/preact/component.js',
+    'app/lib/vendor/preact/create-element.js',
+    'app/lib/vendor/preact/clone-element.js',
+    'app/lib/vendor/preact/create-context.js',
+    'app/lib/vendor/preact/diff/catch-error.js',
+    'app/lib/vendor/preact/diff/props.js',
+    'app/lib/vendor/preact/diff/children.js',
+    'app/lib/vendor/preact/diff/index.js',
+    'app/lib/vendor/preact/render.js',
+    'app/lib/vendor/preact/index.js',
     // Core Framework
-    'app/core/reactivity.js',
-    'app/core/template-compiler.js',
-    'app/core/template.js',
-    'app/core/component.js',
-    'app/core/store.js',
-    'app/core/utils.js',
+    'app/lib/core/reactivity.js',
+    'app/lib/core/template-compiler.js',
+    'app/lib/core/template.js',
+    'app/lib/core/component.js',
+    'app/lib/core/store.js',
 ];
 
 // What to export from the final bundle
@@ -54,11 +53,17 @@ const PUBLIC_EXPORTS = [
     'reactive',
     'createEffect',
     'createStore',
-    'notify',
-    'notifications',
-    'darkTheme',
-    'localStore',
-    'computed'
+    'computed',
+    'trackAllDependencies',
+    'isReactive',
+    'watch',
+    'memo',
+    'pruneTemplateCache',
+    'h',
+    'Fragment',
+    'render',
+    'Component',
+    'createContext'
 ];
 
 class ModuleInfo {
@@ -486,6 +491,10 @@ function generateBundle(modules, sortedFiles) {
         }
     }
 
+    // Add export aliases (for Preact BaseComponent -> Component)
+    bundle += `\n// Export aliases\n`;
+    bundle += `const Component = BaseComponent;\n`;
+
     // Add public exports
     bundle += `\n// ============= Public API =============\n`;
     bundle += `export {\n`;
@@ -706,12 +715,12 @@ function bundle() {
     const bundleContent = generateBundle(modules, sortedFiles);
 
     // Write output
-    const outputDir = path.join(__dirname, 'app', 'bundle-demo');
+    const outputDir = path.join(__dirname, 'app', 'dist');
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const outputPath = path.join(outputDir, 'framework-bundle.js');
+    const outputPath = path.join(outputDir, 'framework.js');
     fs.writeFileSync(outputPath, bundleContent);
 
     console.log(`\n✓ Bundle created: ${outputPath}`);

@@ -2,8 +2,8 @@
  * LazySelectBox Component - Inline editable select
  * Shows value as text, becomes dropdown on hover/click
  */
-import { defineComponent } from '../core/component.js';
-import { html, each, when } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each, when } from '../lib/framework.js';
 
 export default defineComponent('x-lazy-select-box', {
     props: {

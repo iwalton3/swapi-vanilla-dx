@@ -1,8 +1,8 @@
 /**
  * Conditional Demo - Demonstrates conditional rendering patterns
  */
-import { defineComponent } from '../core/component.js';
-import { html, when } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, when } from '../lib/framework.js';
 
 export default defineComponent('conditional-demo', {
     data() {

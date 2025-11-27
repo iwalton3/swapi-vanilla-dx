@@ -2,8 +2,8 @@
  * Password Generator Component (SPWG)
  */
 
-import { defineComponent } from '../../core/component.js';
-import { html, raw } from '../../core/template.js';
+import { defineComponent } from '../../lib/framework.js';
+import { html, raw } from '../../lib/framework.js';
 import { fromlength, fromlengthbatch, frombits, frommax, tonumber, towords } from './spwg_api.js';
 
 defineComponent('spwg-page', {

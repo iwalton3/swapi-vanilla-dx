@@ -2,9 +2,9 @@
  * Notification List Component
  * Displays toast notifications in the bottom-right corner
  */
-import { defineComponent } from '../core/component.js';
-import { html, when, each, raw } from '../core/template.js';
-import { notifications } from '../core/utils.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, when, each, raw } from '../lib/framework.js';
+import { notifications } from '../lib/utils.js';
 import './icon.js';
 
 export default defineComponent('notification-list', {

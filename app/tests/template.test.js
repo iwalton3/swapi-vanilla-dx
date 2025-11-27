@@ -3,9 +3,9 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { html, raw } from '../core/template.js';
-import { render as preactRender } from '../vendor/preact/index.js';
-import { applyValues } from '../core/template-compiler.js';
+import { html, raw } from '../lib/framework.js';
+import { render as preactRender } from '../lib/vendor/preact/index.js';
+import { applyValues } from '../lib/core/template-compiler.js';
 
 // Helper to render template and get HTML string
 function renderToString(template) {

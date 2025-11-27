@@ -1,9 +1,9 @@
 /**
  * UserManager - Manage user roles and registration
  */
-import { defineComponent } from '../core/component.js';
-import { html, each } from '../core/template.js';
-import { notify } from '../core/utils.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each } from '../lib/framework.js';
+import { notify } from '../lib/utils.js';
 import * as api from '../api.js';
 import '../components/select-box.js';
 import '../components/lazy-select-box.js';

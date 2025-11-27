@@ -3,7 +3,7 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { createStore } from '../core/store.js';
+import { createStore } from '../lib/framework.js';
 
 // Mock API
 const mockApi = {

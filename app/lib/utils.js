@@ -3,7 +3,7 @@
  * Common helpers for async operations, notifications, etc.
  */
 
-import { createStore } from './store.js';
+import { createStore } from './framework.js';
 
 // memo is now in reactivity.js (old vdom.js version no longer used)
 

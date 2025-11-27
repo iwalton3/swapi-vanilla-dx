@@ -1,8 +1,8 @@
 /**
  * Icon Component - Displays icons with retina support
  */
-import { defineComponent } from '../core/component.js';
-import { html } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html } from '../lib/framework.js';
 
 export default defineComponent('x-icon', {
     props: {

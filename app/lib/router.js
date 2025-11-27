@@ -3,8 +3,8 @@
  * Hash-based routing with nested routes and query parameters
  */
 
-import { createStore } from './store.js';
-import { pruneTemplateCache } from './template-compiler.js';
+import { createStore } from './framework.js';
+import { pruneTemplateCache } from './core/template-compiler.js';
 
 /**
  * Parse query string into object

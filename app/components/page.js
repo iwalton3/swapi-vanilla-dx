@@ -1,8 +1,7 @@
 /**
  * Page wrapper component with header
  */
-import { defineComponent } from './component.js';
-import { html } from './template.js';
+import { defineComponent, html } from '../lib/framework.js';
 import conf from '../conf.js';
 
 export default defineComponent('page-wrapper', {

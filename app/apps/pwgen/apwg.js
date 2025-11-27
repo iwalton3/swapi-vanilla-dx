@@ -2,12 +2,12 @@
  * APWG - Advanced Password Generator
  * Generates passwords using word-based patterns
  */
-import { defineComponent } from '../../core/component.js';
-import { html, raw } from '../../core/template.js';
-import { range } from '../../core/utils.js';
+import { defineComponent } from '../../lib/framework.js';
+import { html, raw } from '../../lib/framework.js';
+import { range } from '../../lib/utils.js';
 import { apwg } from './spwg_api.js';
 import '../../components/select-box.js';
-import '../../core/x-page.js';
+import '../../components/x-page.js';
 
 export default defineComponent('apwg-page', {
     data() {

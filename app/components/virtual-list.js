@@ -2,8 +2,8 @@
  * Virtual List Component
  * Efficiently renders large lists by only rendering visible items
  */
-import { defineComponent } from '../core/component.js';
-import { html, each, when } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each, when } from '../lib/framework.js';
 
 export default defineComponent('virtual-list', {
     props: {

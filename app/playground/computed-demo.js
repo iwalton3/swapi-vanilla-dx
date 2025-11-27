@@ -1,9 +1,9 @@
 /**
  * Computed Properties Demo - Demonstrates performance optimization with cached computations
  */
-import { defineComponent } from '../core/component.js';
-import { html, each, when } from '../core/template.js';
-import { computed } from '../core/utils.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each, when } from '../lib/framework.js';
+import { computed } from '../lib/utils.js';
 
 export default defineComponent('computed-demo', {
     data() {

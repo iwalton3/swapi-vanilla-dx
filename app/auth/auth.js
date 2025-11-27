@@ -2,7 +2,7 @@
  * Authentication System
  * Manages user login, capabilities, and sessions
  */
-import { createStore } from '../core/store.js';
+import { createStore } from '../lib/framework.js';
 import * as api from '../api.js';
 
 class Login {

@@ -1,8 +1,7 @@
 /**
  * 404 Page Not Found Component
  */
-import { defineComponent } from './core/component.js';
-import { html } from './core/template.js';
+import { defineComponent, html } from './lib/framework.js';
 
 export default defineComponent('page-not-found', {
     template() {

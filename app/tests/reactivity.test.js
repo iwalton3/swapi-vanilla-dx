@@ -3,7 +3,7 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { reactive, createEffect, computed, watch, isReactive, trackAllDependencies, memo } from '../core/reactivity.js';
+import { reactive, createEffect, computed, watch, isReactive, trackAllDependencies, memo } from '../lib/framework.js';
 
 describe('Reactivity System', function(it) {
     it('creates reactive proxy', () => {

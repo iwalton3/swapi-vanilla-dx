@@ -1,8 +1,8 @@
 /**
  * SelectBox Component - Simple select dropdown
  */
-import { defineComponent } from '../core/component.js';
-import { html, each } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each } from '../lib/framework.js';
 
 export default defineComponent('x-select-box', {
     props: {

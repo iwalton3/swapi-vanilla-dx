@@ -3,9 +3,9 @@
  * Displays hierarchical action tree with sections and areas
  */
 
-import { defineComponent } from '../core/component.js';
+import { defineComponent } from '../lib/framework.js';
 import { get_actions_tree } from '../api.js';
-import { html, each, when } from '../core/template.js';
+import { html, each, when } from '../lib/framework.js';
 import RemoteButton from './remote-button.js';
 
 export default defineComponent('remote-control', {

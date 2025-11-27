@@ -1,8 +1,8 @@
 /**
  * Nested Demo - Demonstrates nested component composition
  */
-import { defineComponent } from '../core/component.js';
-import { html, each } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, each } from '../lib/framework.js';
 
 // Child component: User Card
 defineComponent('user-card', {

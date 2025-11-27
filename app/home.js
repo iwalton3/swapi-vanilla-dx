@@ -1,8 +1,7 @@
 /**
  * Home Page
  */
-import { defineComponent } from './core/component.js';
-import { html, when } from './core/template.js';
+import { defineComponent, html, when } from './lib/framework.js';
 import './auth/user-tools.js';
 import './components/tiles.js';
 

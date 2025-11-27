@@ -2,11 +2,11 @@
  * Main Application Entry Point
  */
 
-import { Router, defineRouterOutlet, defineRouterLink } from './core/router.js';
+import { Router, defineRouterOutlet, defineRouterLink } from './lib/router.js';
 import login from './auth/auth.js';
 
 // Import core components
-import './core/app-header.js';
+import './components/app-header.js';
 
 // Import pages
 import './home.js';
@@ -70,6 +70,14 @@ const router = new Router({
     '/hremote/': {
         component: 'remote-control',
         require: 'root'
+    },
+    '/locationtool/': {
+        component: 'location-tool',
+        require: 'locationtool'
+    },
+    '/hometool/': {
+        component: 'home-tool',
+        require: 'homeapi'
     },
     '/404': {
         component: 'page-not-found'

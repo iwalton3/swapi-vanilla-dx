@@ -1,9 +1,9 @@
 /**
  * Form Demo - Demonstrates form handling and validation
  */
-import { defineComponent } from '../core/component.js';
-import { html, when } from '../core/template.js';
-import { notify } from '../core/utils.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, when } from '../lib/framework.js';
+import { notify } from '../lib/utils.js';
 
 export default defineComponent('form-demo', {
     data() {

@@ -2,10 +2,10 @@
  * V1 - Legacy Password Generator
  * DEPRECATED: Simple password generator for backwards compatibility
  */
-import { defineComponent } from '../../core/component.js';
-import { html } from '../../core/template.js';
+import { defineComponent } from '../../lib/framework.js';
+import { html } from '../../lib/framework.js';
 import { pwgen } from './spwg_api.js';
-import '../../core/x-page.js';
+import '../../components/x-page.js';
 
 export default defineComponent('v1-page', {
     data() {

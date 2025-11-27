@@ -4,7 +4,7 @@
  *
  * This component only provides CSS styling - no template needed.
  */
-import { defineComponent } from './component.js';
+import { defineComponent } from '../lib/framework.js';
 
 export default defineComponent('x-page', {
     styles: `

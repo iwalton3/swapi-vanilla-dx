@@ -1,10 +1,10 @@
 /**
  * UserTools - Account widget showing login/logout options
  */
-import { defineComponent } from '../core/component.js';
-import { html, when } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html, when } from '../lib/framework.js';
 import login from './auth.js';
-import { darkTheme } from '../core/utils.js';
+import { darkTheme } from '../lib/utils.js';
 import '../components/icon.js';
 
 export default defineComponent('user-tools', {

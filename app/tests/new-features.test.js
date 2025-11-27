@@ -8,11 +8,11 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { defineComponent } from '../core/component.js';
-import { html } from '../core/template.js';
-import { computed } from '../core/utils.js';
-import { compileTemplate, applyValues } from '../core/template-compiler.js';
-import { render as preactRender } from '../vendor/preact/index.js';
+import { defineComponent } from '../lib/framework.js';
+import { html } from '../lib/framework.js';
+import { computed } from '../lib/utils.js';
+import { compileTemplate, applyValues } from '../lib/core/template-compiler.js';
+import { render as preactRender } from '../lib/vendor/preact/index.js';
 import '../components/virtual-list.js';
 
 describe('x-model Two-Way Binding', function(it) {

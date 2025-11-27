@@ -3,9 +3,9 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { compileTemplate, applyValues, clearTemplateCache, getTemplateCacheSize } from '../core/template-compiler.js';
-import { html } from '../core/template.js';
-import { render as preactRender } from '../vendor/preact/index.js';
+import { compileTemplate, applyValues, clearTemplateCache, getTemplateCacheSize } from '../lib/core/template-compiler.js';
+import { html } from '../lib/framework.js';
+import { render as preactRender } from '../lib/vendor/preact/index.js';
 
 // Define a simple test custom element
 if (!customElements.get('x-component')) {

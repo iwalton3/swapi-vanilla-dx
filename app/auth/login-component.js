@@ -1,10 +1,10 @@
 /**
  * LoginComponent - Two-step OTP login form
  */
-import { defineComponent } from '../core/component.js';
-import { html } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { html } from '../lib/framework.js';
 import login from './auth.js';
-import { notify } from '../core/utils.js';
+import { notify } from '../lib/utils.js';
 
 export default defineComponent('login-component', {
     props: {

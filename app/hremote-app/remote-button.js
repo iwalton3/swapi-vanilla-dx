@@ -3,10 +3,10 @@
  * Individual button that calls an action and disables temporarily
  */
 
-import { defineComponent } from '../core/component.js';
-import { sleep } from '../core/utils.js';
+import { defineComponent } from '../lib/framework.js';
+import { sleep } from '../lib/utils.js';
 import { call_action } from '../api.js';
-import { html } from '../core/template.js';
+import { html } from '../lib/framework.js';
 
 export default defineComponent('remote-button', {
     props: {

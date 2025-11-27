@@ -3,9 +3,9 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { defineComponent } from '../core/component.js';
-import { createStore } from '../core/store.js';
-import { html } from '../core/template.js';
+import { defineComponent } from '../lib/framework.js';
+import { createStore } from '../lib/framework.js';
+import { html } from '../lib/framework.js';
 
 describe('Component State Management', function(it) {
     it('initializes component state', () => {

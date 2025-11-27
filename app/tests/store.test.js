@@ -3,7 +3,7 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { createStore } from '../core/store.js';
+import { createStore } from '../lib/framework.js';
 
 describe('Store System', function(it) {
     it('creates store with initial state', () => {

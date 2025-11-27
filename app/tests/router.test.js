@@ -3,7 +3,7 @@
  */
 
 import { describe, assert } from './test-runner.js';
-import { Router } from '../core/router.js';
+import { Router } from '../lib/router.js';
 
 describe('Router', function(it) {
     it('creates router with routes', () => {
