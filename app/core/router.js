@@ -54,8 +54,6 @@ export class Router {
         this.useHTML5 = this._detectRoutingMode();
         this.base = this._getBase();
 
-        console.log(`[Router] Mode: ${this.useHTML5 ? 'HTML5' : 'Hash'}, Base: ${this.base}`);
-
         // Flatten nested routes
         this._flattenRoutes(routes);
 
@@ -130,12 +128,17 @@ export class Router {
             const baseTag = document.querySelector('base[href]');
             if (baseTag) {
                 let base = baseTag.getAttribute('href');
-                // Remove trailing slash
+                // Remove trailing slash, but preserve empty string for root base
+                if (base === '/') {
+                    return '';
+                }
                 if (base.endsWith('/')) {
                     base = base.slice(0, -1);
                 }
                 return base;
             }
+            // Fallback to empty base if no base tag in HTML5 mode
+            return '';
         }
         // Hash routing uses # as base
         return window.location.origin + window.location.pathname + '#';
@@ -243,7 +246,7 @@ export class Router {
             const fullPath = window.location.pathname;
             // Remove base from path
             let relativePath = fullPath;
-            if (this.base && fullPath.startsWith(this.base)) {
+            if (this.base && this.base.length > 0 && fullPath.startsWith(this.base)) {
                 relativePath = fullPath.slice(this.base.length);
             }
             if (!relativePath.startsWith('/')) {

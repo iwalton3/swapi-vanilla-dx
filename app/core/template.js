@@ -23,14 +23,6 @@ const URL_ATTRIBUTES = new Set([
 // Dangerous attributes where interpolation should be blocked
 const DANGEROUS_ATTRIBUTES = new Set(['style', 'srcdoc']);
 
-// Boolean attributes that should use presence/absence pattern
-const BOOLEAN_ATTRIBUTES = new Set([
-    'checked', 'selected', 'disabled', 'readonly', 'required',
-    'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
-    'muted', 'open', 'reversed', 'hidden', 'async', 'defer',
-    'novalidate', 'formnovalidate', 'ismap', 'itemscope'
-]);
-
 /**
  * Normalize input to prevent encoding attacks
  */
@@ -59,42 +51,10 @@ function normalizeInput(input) {
 }
 
 /**
- * Escape HTML content (for use between tags)
- */
-export function escapeHtml(unsafe) {
-    const normalized = normalizeInput(unsafe);
-    return normalized
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;');
-}
-
-/**
- * Escape HTML attributes (stricter than content)
- */
-export function escapeAttr(unsafe) {
-    const normalized = normalizeInput(unsafe);
-    return normalized
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;')
-        .replace(/=/g, '&#x3D;')
-        .replace(/`/g, '&#x60;')
-        .replace(/\n/g, '&#x0A;')
-        .replace(/\r/g, '&#x0D;')
-        .replace(/\t/g, '&#x09;');
-}
-
-/**
  * Escape URL for use in attributes (preserves : and / which are safe in URLs)
+ * Internal helper - not exported
  */
-export function escapeUrl(url) {
+function escapeUrl(url) {
     const normalized = normalizeInput(url);
     return normalized
         .replace(/&/g, '&amp;')
@@ -207,13 +167,10 @@ function detectContext(precedingString) {
     return { type: 'attribute', tagName, attrName };
 }
 
-// Feature flag for compiled templates (set to true to enable experimental compiler)
-export const USE_COMPILED_TEMPLATES = true;
-
 /**
  * Tagged template literal with automatic context-aware escaping
  *
- * Can use compiled templates for performance (when USE_COMPILED_TEMPLATES = true):
+ * Uses compiled templates for performance:
  * - Parses template once and caches
  * - Creates structured tree
  * - Fills slots on each render
@@ -222,44 +179,17 @@ export const USE_COMPILED_TEMPLATES = true;
  * Returns a special object that can be nested without double-escaping
  */
 export function html(strings, ...values) {
-    // All templates now use the compiled path
-    if (!html._useCompiled || !html._compiler) {
-        console.error('[html] Template compiler not initialized. Call html.init(templateCompiler) first.');
-        return {
-            [HTML_MARKER]: true,
-            _compiled: null,
-            _values: [],
-            toString() {
-                return '<!-- template compiler not initialized -->';
-            }
-        };
-    }
+    const { compileTemplate } = html._compiler;
+    const compiled = compileTemplate(strings);
 
-    try {
-        const { compileTemplate } = html._compiler;
-        const compiled = compileTemplate(strings);
-
-        return {
-            [HTML_MARKER]: true,
-            _compiled: compiled,
-            _values: values,
-            toString() {
-                // Compiled templates are rendered via Preact, not strings
-                // This is only for backward compat with legacy code/debugging
-                return '<!-- compiled template -->';
-            }
-        };
-    } catch (error) {
-        console.error('[html] Template compilation failed:', error);
-        return {
-            [HTML_MARKER]: true,
-            _compiled: null,
-            _values: [],
-            toString() {
-                return '<!-- compilation error -->';
-            }
-        };
-    }
+    return {
+        [HTML_MARKER]: true,
+        _compiled: compiled,
+        _values: values,
+        toString() {
+            return '';  // Not used in production
+        }
+    };
 }
 
 /**
@@ -276,30 +206,6 @@ export function raw(htmlString) {
     };
 }
 
-/**
- * For debugging: check what context would be detected
- */
-export function debugContext(templateString) {
-    return detectContext(templateString);
-}
-
-/**
- * Check if a string is a prop marker and retrieve the actual value
- * Note: With compiled templates, prop markers are no longer used.
- * This function is kept for backward compatibility and always returns null.
- */
-export function getPropValue(str) {
-    return null;
-}
-
-/**
- * Check if a string is an event handler marker and retrieve the function
- * Note: With compiled templates, event markers are no longer used.
- * This function is kept for backward compatibility and always returns null.
- */
-export function getEventHandler(str) {
-    return null;
-}
 
 /**
  * Conditional rendering helper
@@ -314,17 +220,14 @@ export function when(condition, thenValue, elseValue = null) {
 
     // Preact handles null/false natively - just return it
     if (!result) {
-        if (USE_COMPILED_TEMPLATES) {
-            // Return null wrapped in compiled structure
-            return {
-                [HTML_MARKER]: true,
-                _compiled: null,  // Preact handles null children
-                toString() {
-                    return '';
-                }
-            };
-        }
-        return raw('');
+        // Return null wrapped in compiled structure
+        return {
+            [HTML_MARKER]: true,
+            _compiled: null,  // Preact handles null children
+            toString() {
+                return '';
+            }
+        };
     }
 
     // Handle html template objects (check Symbol for security)
@@ -360,21 +263,18 @@ export function when(condition, thenValue, elseValue = null) {
  */
 export function each(array, mapFn, keyFn = null) {
     if (!array || !Array.isArray(array)) {
-        // Return empty fragment (not raw HTML) to maintain consistent type
-        if (USE_COMPILED_TEMPLATES) {
-            return {
-                [HTML_MARKER]: true,
-                _compiled: {
-                    type: 'fragment',
-                    wrapped: false,
-                    children: []
-                },
-                toString() {
-                    return '';
-                }
-            };
-        }
-        return raw('');
+        // Return empty fragment
+        return {
+            [HTML_MARKER]: true,
+            _compiled: {
+                type: 'fragment',
+                wrapped: false,
+                children: []
+            },
+            toString() {
+                return '';
+            }
+        };
     }
 
     const results = array.map((item, index) => {
@@ -396,134 +296,48 @@ export function each(array, mapFn, keyFn = null) {
         return result;
     });
 
-    // Check if results contain compiled templates
-    const hasCompiled = results.some(r => r && r._compiled);
+    // Extract compiled trees from results, keeping track of original item index
+    // IMPORTANT: Also preserve _values from nested templates
+    const compiledChildren = results
+        .map((r, itemIndex) => {
+            if (!r || !r._compiled) return null;
 
-    // Always use compiled templates if enabled (even for empty arrays to maintain consistent type)
-    if (USE_COMPILED_TEMPLATES && (hasCompiled || results.length === 0)) {
-        // Extract compiled trees from results, keeping track of original item index
-        // IMPORTANT: Also preserve _values from nested templates
-        const compiledChildren = results
-            .map((r, itemIndex) => {
-                if (!r || !r._compiled) return null;
+            const child = r._compiled;
+            const childValues = r._values;  // Preserve values from nested template
 
-                const child = r._compiled;
-                const childValues = r._values;  // Preserve values from nested template
-
-                // Skip whitespace-only text nodes
-                if (child.type === 'text' && child.value && /^\s*$/.test(child.value)) {
-                    return null;
-                }
-
-                // If unwrapped fragment with single element child, unwrap and move key to element
-                // This is needed for Preact's keyed reconciliation (keys must be on elements, not fragments)
-                if (child.type === 'fragment' && !child.wrapped && child.children.length === 1 && child.children[0].type === 'element') {
-                    const element = child.children[0];
-                    const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
-                    return {...element, key, _itemValues: childValues};
-                }
-
-                // For multi-child fragments or other nodes, keep as-is
-                // Set key for Preact reconciliation
-                const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
-                return {...child, key, _itemValues: childValues};
-            })
-            .filter(Boolean);
-
-        // Minimal logging - uncomment for debugging
-        // console.log('[each]', compiledChildren.length, 'items');
-
-        // For compiled templates, return a fragment containing all compiled nodes
-        return {
-            [HTML_MARKER]: true,
-            _compiled: {
-                type: 'fragment',
-                wrapped: false,  // Unwrapped fragments spread their children into parent
-                fromEach: true,   // Mark as from each() to distinguish from nested html() templates
-                children: compiledChildren
-            },
-            toString() {
-                // Fallback for string-based rendering
-                return results.map(r => {
-                    if (isHtml(r)) {
-                        return r.toString();
-                    }
-                    return escapeHtml(r);
-                }).join('');
+            // Skip whitespace-only text nodes
+            if (child.type === 'text' && child.value && /^\s*$/.test(child.value)) {
+                return null;
             }
-        };
-    }
 
-    // String-based path (legacy)
-    const joined = results.map(r => {
-        if (isHtml(r)) {
-            return r.toString();
+            // If unwrapped fragment with single element child, unwrap and move key to element
+            // This is needed for Preact's keyed reconciliation (keys must be on elements, not fragments)
+            if (child.type === 'fragment' && !child.wrapped && child.children.length === 1 && child.children[0].type === 'element') {
+                const element = child.children[0];
+                const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
+                return {...element, key, _itemValues: childValues};
+            }
+
+            // For multi-child fragments or other nodes, keep as-is
+            // Set key for Preact reconciliation
+            const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
+            return {...child, key, _itemValues: childValues};
+        })
+        .filter(Boolean);
+
+    // Return a fragment containing all compiled nodes
+    return {
+        [HTML_MARKER]: true,
+        _compiled: {
+            type: 'fragment',
+            wrapped: false,  // Unwrapped fragments spread their children into parent
+            fromEach: true,   // Mark as from each() to distinguish from nested html() templates
+            children: compiledChildren
+        },
+        toString() {
+            return '';  // Not used in production
         }
-        return escapeHtml(r);
-    }).join('');
-
-    return raw(joined);
+    };
 }
-/**
- * Convert compiled tree to HTML string (for backwards compatibility)
- * @param {Object} tree - Compiled template tree
- * @returns {string} HTML string
- */
-function treeToString(tree) {
-    if (!tree) return '';
-
-    if (tree.type === 'text') {
-        return tree.value || '';
-    }
-
-    if (tree.type === 'html') {
-        return tree.value || '';
-    }
-
-    if (tree.type === 'fragment') {
-        return tree.children.map(treeToString).join('');
-    }
-
-    if (tree.type === 'element') {
-        const {tag, attrs = {}, children = []} = tree;
-        const attrStr = Object.entries(attrs)
-            .map(([name, value]) => {
-                if (value && typeof value === 'object' && value.propValue !== undefined) {
-                    return ''; // Skip object props in string representation
-                }
-                return value === '' ? name : `${name}="${value}"`;
-            })
-            .filter(Boolean)
-            .join(' ');
-
-        const childrenStr = children.map(treeToString).join('');
-
-        const attrsPart = attrStr ? ` ${attrStr}` : '';
-
-        // Void elements
-        const voidElements = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
-        if (voidElements.has(tag)) {
-            return `<${tag}${attrsPart}>`;
-        }
-
-        return `<${tag}${attrsPart}>${childrenStr}</${tag}>`;
-    }
-
-    return '';
-}
-
-/**
- * Register the template compiler for use with html() function
- * Call this to enable compiled template mode
- * @param {Object} compiler - Compiler module with compileTemplate and applyValues
- */
-export function registerTemplateCompiler(compiler) {
-    html._compiler = compiler;
-    html._useCompiled = true;
-}
-
-// Auto-register compiled template system if enabled
-if (USE_COMPILED_TEMPLATES) {
-    registerTemplateCompiler(templateCompiler);
-    console.log('[Template] Compiled template system enabled');
-}
+// Initialize template compiler at module load
+html._compiler = templateCompiler;

@@ -2,21 +2,21 @@
     {
         "spa": false,
         "name": "Playground",
-        "path": "/playground.html",
+        "path": "playground.html",
         "icon": "/theme/terminal.svg",
         "info": "Interactive demos showcasing the custom zero-dependency web framework features."
     },
     {
         "spa": false,
         "name": "Test Suite",
-        "path": "/tests/",
+        "path": "tests/",
         "icon": "/theme/terminal.svg",
         "info": "Comprehensive test suite for the framework (~160 tests covering all features)."
     },
     {
         "spa": false,
         "name": "Embedding",
-        "path": "/bundle-demo/",
+        "path": "bundle-demo/",
         "icon": "/theme/terminal.svg",
         "info": "Self-contained framework bundle demo - single file, no build step, perfect for embedding in static sites."
     },

@@ -55,6 +55,7 @@ const PUBLIC_EXPORTS = [
     'createEffect',
     'createStore',
     'notify',
+    'notifications',
     'darkTheme',
     'localStore',
     'computed'

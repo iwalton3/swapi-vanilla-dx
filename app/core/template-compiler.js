@@ -16,7 +16,7 @@
  * @module core/template-compiler
  */
 
-import { escapeHtml, escapeAttr, sanitizeUrl, isHtml, isRaw, getEventHandler, getPropValue } from './template.js';
+import { sanitizeUrl, isHtml, isRaw } from './template.js';
 import { h, Fragment } from '../vendor/preact/index.js';
 
 /**

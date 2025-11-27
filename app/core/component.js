@@ -6,15 +6,7 @@
 import { reactive, createEffect, trackAllDependencies } from './reactivity.js';
 import { render as preactRender } from '../vendor/preact/index.js';
 import { applyValues } from './template-compiler.js';
-import { html, getPropValue, getEventHandler } from './template.js';
-
-// Debug logging control - only enable for specific components
-const DEBUG_COMPONENTS = new Set([
-    // Add component names here to debug them, e.g.:
-    // 'HOME-PAGE',
-    // 'X-TILES',
-    // 'USER-TOOLS'
-]);
+import { html } from './template.js';
 
 // Cache for processed component styles (tag name -> processed CSS string)
 const processedStylesCache = new Map();
@@ -185,10 +177,6 @@ export function defineComponent(name, options) {
             // Cleanup functions
             this._cleanups = [];
 
-            // Track model bindings for cleanup
-            this._modelListeners = [];
-            this._modelEffects = [];
-
             // Template caching for performance
             this._cachedTemplate = null;
             this._lastStateSnapshot = null;
@@ -297,19 +285,12 @@ export function defineComponent(name, options) {
 
             // Update props
             if (options.props && name in options.props) {
-                // Check if this is a prop marker from template system
-                const propValue = getPropValue(newValue);
-                if (propValue !== null) {
-                    // Use the actual object/array value
-                    this.props[name] = propValue;
-                } else {
-                    // Try to parse JSON for complex types
-                    try {
-                        this.props[name] = JSON.parse(newValue);
-                    } catch {
-                        // If not JSON, use as string
-                        this.props[name] = newValue;
-                    }
+                // Try to parse JSON for complex types
+                try {
+                    this.props[name] = JSON.parse(newValue);
+                } catch {
+                    // If not JSON, use as string
+                    this.props[name] = newValue;
                 }
                 // Trigger re-render
                 this.render();
@@ -347,10 +328,6 @@ export function defineComponent(name, options) {
                             return this.props[propName];
                         },
                         set(value) {
-                            const isDebug = DEBUG_COMPONENTS.has(this.tagName);
-                            if (isDebug) {
-                                console.log(`[${this.tagName}] Prop "${propName}" changed:`, value);
-                            }
                             this.props[propName] = value;
                             // Re-parse and re-render
                             if (this._isMounted) {
@@ -385,19 +362,12 @@ export function defineComponent(name, options) {
                     // Check for attribute
                     const attrValue = this.getAttribute(propName);
                     if (attrValue !== null) {
-                        // Check if this is a prop marker from template system
-                        const propValue = getPropValue(attrValue);
-                        if (propValue !== null) {
-                            // Use the actual object/array value
-                            this.props[propName] = propValue;
-                        } else {
-                            // Try to parse JSON for complex types
-                            try {
-                                this.props[propName] = JSON.parse(attrValue);
-                            } catch {
-                                // If not JSON, use as string
-                                this.props[propName] = attrValue;
-                            }
+                        // Try to parse JSON for complex types
+                        try {
+                            this.props[propName] = JSON.parse(attrValue);
+                        } catch {
+                            // If not JSON, use as string
+                            this.props[propName] = attrValue;
                         }
                     } else if (!(propName in this.props)) {
                         // Use default from props definition if not already set
@@ -414,8 +384,6 @@ export function defineComponent(name, options) {
             }
 
             if (!options.template) return;
-
-            const isDebug = DEBUG_COMPONENTS.has(this.tagName);
 
             // Inject styles into document head if not already done
             if (options.styles && !this._stylesInjected) {
@@ -448,18 +416,6 @@ export function defineComponent(name, options) {
 
             // Convert compiled tree to Preact elements
             if (templateResult && templateResult._compiled) {
-                if (isDebug) {
-                    console.log(`\n[${this.tagName}] Rendering with compiled template`);
-                    // Deep clone to avoid proxy issues when logging
-                    try {
-                        console.log(`[${this.tagName}] State:`, JSON.stringify(this.state, null, 2));
-                        console.log(`[${this.tagName}] Props:`, JSON.stringify(this.props, null, 2));
-                    } catch (e) {
-                        console.log(`[${this.tagName}] State (raw):`, this.state);
-                        console.log(`[${this.tagName}] Props (raw):`, this.props);
-                    }
-                }
-
                 // Apply values and convert to Preact VNode
                 const preactElement = applyValues(
                     templateResult._compiled,
@@ -485,52 +441,6 @@ export function defineComponent(name, options) {
             }
         }
 
-
-        _setupBindings(root) {
-            // Clean up old model bindings to prevent memory leaks
-            this._modelListeners.forEach(({ element, listener }) => {
-                element.removeEventListener('input', listener);
-            });
-            this._modelListeners = [];
-
-            // Dispose old model effects
-            if (this._modelEffects) {
-                this._modelEffects.forEach(dispose => dispose());
-            }
-            this._modelEffects = [];
-
-            // Setup x-model bindings (two-way)
-            const modelElements = root.querySelectorAll('[x-model]');
-
-            modelElements.forEach(el => {
-                const prop = el.getAttribute('x-model');
-                // Don't remove x-model attribute - we need it on subsequent renders
-
-                // Set initial value
-                if (prop in this.state) {
-                    el.value = this.state[prop];
-                }
-
-                // Update state on input - store listener for cleanup
-                const listener = (e) => {
-                    this.state[prop] = e.target.value;
-                };
-
-                el.addEventListener('input', listener);
-                this._modelListeners.push({ element: el, listener });
-
-                // Update element when state changes
-                const { dispose } = createEffect(() => {
-                    if (el.value !== this.state[prop]) {
-                        el.value = this.state[prop];
-                    }
-                });
-
-                // Store dispose function
-                this._modelEffects.push(dispose);
-            });
-        }
-
         // Helper method to access methods from component
         $method(name) {
             return options.methods?.[name]?.bind(this);
@@ -543,11 +453,4 @@ export function defineComponent(name, options) {
     }
 
     return Component;
-}
-
-/**
- * Create a simple functional component (just a template function)
- */
-export function createComponent(templateFn) {
-    return templateFn;
 }

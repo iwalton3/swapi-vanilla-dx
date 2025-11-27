@@ -1,6 +1,6 @@
 /**
  * Custom Framework Bundle
- * Generated: 2025-11-26T20:12:06.055Z
+ * Generated: 2025-11-27T04:05:22.452Z
  *
  * Includes Preact (https://preactjs.com/)
  * Copyright (c) 2015-present Jason Miller
@@ -1763,13 +1763,6 @@ const URL_ATTRIBUTES = new Set([
 
 const DANGEROUS_ATTRIBUTES = new Set(['style', 'srcdoc']);
 
-const BOOLEAN_ATTRIBUTES = new Set([
-    'checked', 'selected', 'disabled', 'readonly', 'required',
-    'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
-    'muted', 'open', 'reversed', 'hidden', 'async', 'defer',
-    'novalidate', 'formnovalidate', 'ismap', 'itemscope'
-]);
-
 function normalizeInput(input) {
     if (input == null) return '';
     let str = String(input);
@@ -1787,33 +1780,6 @@ function normalizeInput(input) {
     str = str.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, '');
 
     return str;
-}
-
-function escapeHtml(unsafe) {
-    const normalized = normalizeInput(unsafe);
-    return normalized
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;');
-}
-
-function escapeAttr(unsafe) {
-    const normalized = normalizeInput(unsafe);
-    return normalized
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;')
-        .replace(/=/g, '&#x3D;')
-        .replace(/`/g, '&#x60;')
-        .replace(/\n/g, '&#x0A;')
-        .replace(/\r/g, '&#x0D;')
-        .replace(/\t/g, '&#x09;');
 }
 
 function escapeUrl(url) {
@@ -1907,46 +1873,18 @@ function detectContext(precedingString) {
     return { type: 'attribute', tagName, attrName };
 }
 
-const USE_COMPILED_TEMPLATES = true;
-
 function html(strings, ...values) {
+    const { compileTemplate } = html._compiler;
+    const compiled = compileTemplate(strings);
 
-    if (!html._useCompiled || !html._compiler) {
-        console.error('[html] Template compiler not initialized. Call html.init(templateCompiler) first.');
-        return {
-            [HTML_MARKER]: true,
-            _compiled: null,
-            _values: [],
-            toString() {
-                return '<!-- template compiler not initialized -->';
-            }
-        };
-    }
-
-    try {
-        const { compileTemplate } = html._compiler;
-        const compiled = compileTemplate(strings);
-
-        return {
-            [HTML_MARKER]: true,
-            _compiled: compiled,
-            _values: values,
-            toString() {
-
-                return '<!-- compiled template -->';
-            }
-        };
-    } catch (error) {
-        console.error('[html] Template compilation failed:', error);
-        return {
-            [HTML_MARKER]: true,
-            _compiled: null,
-            _values: [],
-            toString() {
-                return '<!-- compilation error -->';
-            }
-        };
-    }
+    return {
+        [HTML_MARKER]: true,
+        _compiled: compiled,
+        _values: values,
+        toString() {
+            return '';  
+        }
+    };
 }
 
 function raw(htmlString) {
@@ -1958,33 +1896,18 @@ function raw(htmlString) {
     };
 }
 
-function debugContext(templateString) {
-    return detectContext(templateString);
-}
-
-function getPropValue(str) {
-    return null;
-}
-
-function getEventHandler(str) {
-    return null;
-}
-
 function when(condition, thenValue, elseValue = null) {
     const result = condition ? thenValue : elseValue;
 
     if (!result) {
-        if (USE_COMPILED_TEMPLATES) {
 
-            return {
-                [HTML_MARKER]: true,
-                _compiled: null,  
-                toString() {
-                    return '';
-                }
-            };
-        }
-        return raw('');
+        return {
+            [HTML_MARKER]: true,
+            _compiled: null,  
+            toString() {
+                return '';
+            }
+        };
     }
 
     if (isHtml(result)) {
@@ -2011,20 +1934,17 @@ function when(condition, thenValue, elseValue = null) {
 function each(array, mapFn, keyFn = null) {
     if (!array || !Array.isArray(array)) {
 
-        if (USE_COMPILED_TEMPLATES) {
-            return {
-                [HTML_MARKER]: true,
-                _compiled: {
-                    type: 'fragment',
-                    wrapped: false,
-                    children: []
-                },
-                toString() {
-                    return '';
-                }
-            };
-        }
-        return raw('');
+        return {
+            [HTML_MARKER]: true,
+            _compiled: {
+                type: 'fragment',
+                wrapped: false,
+                children: []
+            },
+            toString() {
+                return '';
+            }
+        };
     }
 
     const results = array.map((item, index) => {
@@ -2045,113 +1965,43 @@ function each(array, mapFn, keyFn = null) {
         return result;
     });
 
-    const hasCompiled = results.some(r => r && r._compiled);
+    const compiledChildren = results
+        .map((r, itemIndex) => {
+            if (!r || !r._compiled) return null;
 
-    if (USE_COMPILED_TEMPLATES && (hasCompiled || results.length === 0)) {
+            const child = r._compiled;
+            const childValues = r._values;  
 
-        const compiledChildren = results
-            .map((r, itemIndex) => {
-                if (!r || !r._compiled) return null;
-
-                const child = r._compiled;
-                const childValues = r._values;  
-
-                if (child.type === 'text' && child.value && /^\s*$/.test(child.value)) {
-                    return null;
-                }
-
-                if (child.type === 'fragment' && !child.wrapped && child.children.length === 1 && child.children[0].type === 'element') {
-                    const element = child.children[0];
-                    const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
-                    return {...element, key, _itemValues: childValues};
-                }
-
-                const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
-                return {...child, key, _itemValues: childValues};
-            })
-            .filter(Boolean);
-
-        return {
-            [HTML_MARKER]: true,
-            _compiled: {
-                type: 'fragment',
-                wrapped: false,  
-                fromEach: true,   
-                children: compiledChildren
-            },
-            toString() {
-
-                return results.map(r => {
-                    if (isHtml(r)) {
-                        return r.toString();
-                    }
-                    return escapeHtml(r);
-                }).join('');
+            if (child.type === 'text' && child.value && /^\s*$/.test(child.value)) {
+                return null;
             }
-        };
-    }
 
-    const joined = results.map(r => {
-        if (isHtml(r)) {
-            return r.toString();
+            if (child.type === 'fragment' && !child.wrapped && child.children.length === 1 && child.children[0].type === 'element') {
+                const element = child.children[0];
+                const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
+                return {...element, key, _itemValues: childValues};
+            }
+
+            const key = keyFn ? keyFn(array[itemIndex]) : itemIndex;
+            return {...child, key, _itemValues: childValues};
+        })
+        .filter(Boolean);
+
+    return {
+        [HTML_MARKER]: true,
+        _compiled: {
+            type: 'fragment',
+            wrapped: false,  
+            fromEach: true,   
+            children: compiledChildren
+        },
+        toString() {
+            return '';  
         }
-        return escapeHtml(r);
-    }).join('');
-
-    return raw(joined);
+    };
 }
 
-function treeToString(tree) {
-    if (!tree) return '';
-
-    if (tree.type === 'text') {
-        return tree.value || '';
-    }
-
-    if (tree.type === 'html') {
-        return tree.value || '';
-    }
-
-    if (tree.type === 'fragment') {
-        return tree.children.map(treeToString).join('');
-    }
-
-    if (tree.type === 'element') {
-        const {tag, attrs = {}, children = []} = tree;
-        const attrStr = Object.entries(attrs)
-            .map(([name, value]) => {
-                if (value && typeof value === 'object' && value.propValue !== undefined) {
-                    return ''; 
-                }
-                return value === '' ? name : `${name}="${value}"`;
-            })
-            .filter(Boolean)
-            .join(' ');
-
-        const childrenStr = children.map(treeToString).join('');
-
-        const attrsPart = attrStr ? ` ${attrStr}` : '';
-
-        const voidElements = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
-        if (voidElements.has(tag)) {
-            return `<${tag}${attrsPart}>`;
-        }
-
-        return `<${tag}${attrsPart}>${childrenStr}</${tag}>`;
-    }
-
-    return '';
-}
-
-function registerTemplateCompiler(compiler) {
-    html._compiler = compiler;
-    html._useCompiled = true;
-}
-
-if (USE_COMPILED_TEMPLATES) {
-    registerTemplateCompiler(templateCompiler);
-    console.log('[Template] Compiled template system enabled');
-}
+html._compiler = templateCompiler;
 
 // ============= template-compiler.js =============
 
@@ -2806,10 +2656,6 @@ function getTemplateCacheSize() {
 
 // ============= component.js =============
 
-const DEBUG_COMPONENTS = new Set([
-
-]);
-
 const processedStylesCache = new Map();
 
 function scopeComponentStyles(css, tagName) {
@@ -2931,9 +2777,6 @@ function defineComponent(name, options) {
 
             this._cleanups = [];
 
-            this._modelListeners = [];
-            this._modelEffects = [];
-
             this._cachedTemplate = null;
             this._lastStateSnapshot = null;
 
@@ -3017,18 +2860,11 @@ function defineComponent(name, options) {
 
             if (options.props && name in options.props) {
 
-                const propValue = getPropValue(newValue);
-                if (propValue !== null) {
+                try {
+                    this.props[name] = JSON.parse(newValue);
+                } catch {
 
-                    this.props[name] = propValue;
-                } else {
-
-                    try {
-                        this.props[name] = JSON.parse(newValue);
-                    } catch {
-
-                        this.props[name] = newValue;
-                    }
+                    this.props[name] = newValue;
                 }
 
                 this.render();
@@ -3064,10 +2900,6 @@ function defineComponent(name, options) {
                             return this.props[propName];
                         },
                         set(value) {
-                            const isDebug = DEBUG_COMPONENTS.has(this.tagName);
-                            if (isDebug) {
-                                console.log(`[${this.tagName}] Prop "${propName}" changed:`, value);
-                            }
                             this.props[propName] = value;
 
                             if (this._isMounted) {
@@ -3100,18 +2932,11 @@ function defineComponent(name, options) {
                     const attrValue = this.getAttribute(propName);
                     if (attrValue !== null) {
 
-                        const propValue = getPropValue(attrValue);
-                        if (propValue !== null) {
+                        try {
+                            this.props[propName] = JSON.parse(attrValue);
+                        } catch {
 
-                            this.props[propName] = propValue;
-                        } else {
-
-                            try {
-                                this.props[propName] = JSON.parse(attrValue);
-                            } catch {
-
-                                this.props[propName] = attrValue;
-                            }
+                            this.props[propName] = attrValue;
                         }
                     } else if (!(propName in this.props)) {
 
@@ -3128,8 +2953,6 @@ function defineComponent(name, options) {
             }
 
             if (!options.template) return;
-
-            const isDebug = DEBUG_COMPONENTS.has(this.tagName);
 
             if (options.styles && !this._stylesInjected) {
                 const styleId = `component-styles-${options.name || this.tagName}`;
@@ -3157,17 +2980,6 @@ function defineComponent(name, options) {
             const templateResult = options.template.call(this);
 
             if (templateResult && templateResult._compiled) {
-                if (isDebug) {
-                    console.log(`\n[${this.tagName}] Rendering with compiled template`);
-
-                    try {
-                        console.log(`[${this.tagName}] State:`, JSON.stringify(this.state, null, 2));
-                        console.log(`[${this.tagName}] Props:`, JSON.stringify(this.props, null, 2));
-                    } catch (e) {
-                        console.log(`[${this.tagName}] State (raw):`, this.state);
-                        console.log(`[${this.tagName}] Props (raw):`, this.props);
-                    }
-                }
 
                 const preactElement = applyValues(
                     templateResult._compiled,
@@ -3190,44 +3002,6 @@ function defineComponent(name, options) {
             }
         }
 
-        _setupBindings(root) {
-
-            this._modelListeners.forEach(({ element, listener }) => {
-                element.removeEventListener('input', listener);
-            });
-            this._modelListeners = [];
-
-            if (this._modelEffects) {
-                this._modelEffects.forEach(dispose => dispose());
-            }
-            this._modelEffects = [];
-
-            const modelElements = root.querySelectorAll('[x-model]');
-
-            modelElements.forEach(el => {
-                const prop = el.getAttribute('x-model');
-
-                if (prop in this.state) {
-                    el.value = this.state[prop];
-                }
-
-                const listener = (e) => {
-                    this.state[prop] = e.target.value;
-                };
-
-                el.addEventListener('input', listener);
-                this._modelListeners.push({ element: el, listener });
-
-                const { dispose } = createEffect(() => {
-                    if (el.value !== this.state[prop]) {
-                        el.value = this.state[prop];
-                    }
-                });
-
-                this._modelEffects.push(dispose);
-            });
-        }
-
         $method(name) {
             return options.methods?.[name]?.bind(this);
         }
@@ -3238,10 +3012,6 @@ function defineComponent(name, options) {
     }
 
     return Component;
-}
-
-function createComponent(templateFn) {
-    return templateFn;
 }
 
 // ============= store.js =============
@@ -3304,66 +3074,6 @@ function createStore(initial) {
                 notifySubscribers();
             }
         }
-    };
-}
-
-function persistentStore(key, initial) {
-
-    let stored = initial;
-    try {
-        const item = localStorage.getItem(key);
-        if (item) {
-            stored = JSON.parse(item);
-        }
-    } catch (e) {
-        console.warn(`Failed to load store "${key}" from localStorage:`, e);
-    }
-
-    const store = createStore(stored);
-
-    store.subscribe((state) => {
-        try {
-            localStorage.setItem(key, JSON.stringify(state));
-        } catch (e) {
-            console.warn(`Failed to save store "${key}" to localStorage:`, e);
-        }
-    });
-
-    return store;
-}
-
-function derived(stores, fn) {
-    const derivedStore = createStore(null);
-
-    const storeArray = Array.isArray(stores) ? stores : [stores];
-
-    const unsubscribers = storeArray.map(store => {
-        return store.subscribe(() => {
-            const values = storeArray.map(s => s.state);
-            const result = fn(...values);
-            derivedStore.set(result);
-        });
-    });
-
-    derivedStore.destroy = () => {
-        unsubscribers.forEach(unsub => unsub());
-    };
-
-    return derivedStore;
-}
-
-function readable(initial, start) {
-    const store = createStore(initial);
-
-    if (start) {
-        start((value) => store.set(value));
-    }
-
-    return {
-        get state() {
-            return store.state;
-        },
-        subscribe: store.subscribe.bind(store)
     };
 }
 
