@@ -836,6 +836,52 @@ Use `router-link` for navigation:
 <router-link to="/about/">About</router-link>
 ```
 
+### Lazy Loading Routes (Optional)
+
+For better performance, routes can be lazy-loaded using dynamic imports. This improves Time to First Contentful Paint by only loading the requested route initially:
+
+```javascript
+const router = new Router({
+    '/': {
+        component: 'home-page',
+        load: () => import('./home.js')  // Lazy load on demand
+    },
+    '/admin/': {
+        component: 'admin-page',
+        require: 'admin',
+        load: () => import('./admin.js')  // Component loads its own dependencies
+    }
+});
+```
+
+**How it works:**
+1. When a route is visited for the first time, the router calls the `load` function
+2. The component module is dynamically imported
+3. Component is cached in `router.loadedComponents` Set
+4. Subsequent visits to the same route are instant (no re-download)
+
+**Benefits:**
+- Only the initial route loads on page load
+- Other routes load on-demand when navigated to
+- Components manage their own dependencies via import statements
+- ES module caching ensures no duplicate downloads
+
+**Component dependencies:**
+Each lazy-loaded component should import its own dependencies:
+
+```javascript
+// In home.js
+import { defineComponent } from './lib/framework.js';
+import './components/tiles.js';     // Component imports what it needs
+import './auth/user-tools.js';
+
+export default defineComponent('home-page', {
+    // ...
+});
+```
+
+The browser's ES module system automatically caches all imports, so there's no performance penalty for components importing their dependencies.
+
 ## Dark Theme
 
 ```javascript

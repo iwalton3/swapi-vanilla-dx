@@ -3,8 +3,7 @@
  * Hash-based routing with nested routes and query parameters
  */
 
-import { createStore } from './framework.js';
-import { pruneTemplateCache } from './core/template-compiler.js';
+import { createStore, pruneTemplateCache } from './framework.js';
 
 /**
  * Parse query string into object
@@ -49,6 +48,7 @@ export class Router {
         this.beforeHooks = [];
         this.afterHooks = [];
         this.outletElement = null;
+        this.loadedComponents = new Set(); // Track loaded components
 
         // Detect routing mode: HTML5 (with base tag) or hash
         this.useHTML5 = this._detectRoutingMode();
@@ -288,6 +288,18 @@ export class Router {
             if (result === false) {
                 // Navigation cancelled
                 return;
+            }
+        }
+
+        // Lazy load component if needed
+        if (route.load && route.component && !this.loadedComponents.has(route.component)) {
+            try {
+                await route.load();
+                this.loadedComponents.add(route.component);
+            } catch (error) {
+                console.error(`Failed to load component for route ${path}:`, error);
+                // Fallback to 404 on load error
+                route = this.routes['/404'] || { component: 'page-not-found' };
             }
         }
 

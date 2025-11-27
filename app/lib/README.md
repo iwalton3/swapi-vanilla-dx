@@ -65,9 +65,20 @@ import { defineComponent } from './lib/core/component.js';
 - `h, Fragment, render, Component, createContext` - Preact primitives
 
 ### `router.js`
-- `Router(routes)` - Create router instance
+- `Router(routes)` - Create router instance with optional lazy loading
 - `defineRouterOutlet()` - Define `<router-outlet>` element
 - `defineRouterLink(router)` - Define `<router-link>` element
+
+**Lazy Loading:**
+Routes can optionally specify a `load` function for dynamic imports:
+```javascript
+const router = new Router({
+    '/': {
+        component: 'home-page',
+        load: () => import('./home.js')  // Loads on demand
+    }
+});
+```
 
 ### `utils.js`
 - `notify(message, severity, ttl)` - Show toast notification

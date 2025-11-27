@@ -5,82 +5,62 @@
 import { Router, defineRouterOutlet, defineRouterLink } from './lib/router.js';
 import login from './auth/auth.js';
 
-// Import core components
+// Import core components (needed immediately)
 import './components/app-header.js';
-
-// Import pages
-import './home.js';
-import './page-not-found.js';
-import './apps/pwgen/spwg.js';
-import './apps/pwgen/apwg.js';
-import './apps/pwgen/v1.js';
-
-// Import applications
-import './hremote-app/remote-button.js';
-import './hremote-app/remote.js';
-
-// Import auth system
-import './auth/login.js';
-import './auth/login-component.js';
-import './auth/user-manager.js';
-import './auth/user-tools.js';
-import './auth/logoff-all.js';
-import './auth/auth-error.js';
-
-// Import components
-import './components/icon.js';
-import './components/select-box.js';
-import './components/lazy-select-box.js';
-import './components/tiles.js';
 import './components/notification-list.js';
+
+// Note: All other components are lazy-loaded by the pages that use them
 
 // Define router outlet
 defineRouterOutlet();
 
-// Setup router
+// Setup router with lazy loading
 const router = new Router({
     '/': {
-        component: 'home-page'
+        component: 'home-page',
+        load: () => import('./home.js')
     },
     '/pwgen/': {
-        component: 'spwg-page'
+        component: 'spwg-page',
+        load: () => import('./apps/pwgen/spwg.js')
     },
     '/pwgen/apwg/': {
-        component: 'apwg-page'
+        component: 'apwg-page',
+        load: () => import('./apps/pwgen/apwg.js')
     },
     '/pwgen/v1/': {
-        component: 'v1-page'
+        component: 'v1-page',
+        load: () => import('./apps/pwgen/v1.js')
     },
     '/auth/': {
-        component: 'auth-login'
+        component: 'auth-login',
+        load: () => import('./auth/login.js')
     },
     '/auth/login/': {
-        component: 'auth-login'
+        component: 'auth-login',
+        load: () => import('./auth/login.js')
     },
     '/auth/logoff-all/': {
-        component: 'auth-logoff-all'
+        component: 'auth-logoff-all',
+        load: () => import('./auth/logoff-all.js')
     },
     '/auth/error/': {
-        component: 'auth-error'
+        component: 'auth-error',
+        load: () => import('./auth/auth-error.js')
     },
     '/auth/admin/': {
         component: 'user-manager',
-        require: 'accountmanager'
+        require: 'accountmanager',
+        load: () => import('./auth/user-manager.js')  // Let component import its own deps
     },
     '/hremote/': {
         component: 'remote-control',
-        require: 'root'
-    },
-    '/locationtool/': {
-        component: 'location-tool',
-        require: 'locationtool'
-    },
-    '/hometool/': {
-        component: 'home-tool',
-        require: 'homeapi'
+        require: 'root',
+        load: () => import('./hremote-app/remote.js')  // Let component import its own deps
     },
     '/404': {
-        component: 'page-not-found'
+        component: 'page-not-found',
+        load: () => import('./page-not-found.js')
     }
 });
 
