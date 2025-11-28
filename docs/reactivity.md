@@ -352,6 +352,96 @@ template() {
 }
 ```
 
+## Watch
+
+The `watch()` function monitors reactive values and executes a callback when they change:
+
+```javascript
+import { watch, reactive } from './lib/framework.js';
+
+const state = reactive({ count: 0 });
+
+// Watch a value and react to changes
+const stopWatching = watch(
+    () => state.count,  // Getter function returning value to watch
+    (newValue, oldValue) => {
+        console.log(`Count changed from ${oldValue} to ${newValue}`);
+    }
+);
+
+state.count = 5;  // Logs: Count changed from 0 to 5
+state.count = 10; // Logs: Count changed from 5 to 10
+
+// Stop watching when done
+stopWatching();
+
+state.count = 15; // No log - watcher has been disposed
+```
+
+### Use Cases
+
+**1. Side Effects on State Changes**
+```javascript
+mounted() {
+    this._unwatch = watch(
+        () => this.state.selectedItem,
+        async (itemId) => {
+            if (itemId) {
+                this.state.itemDetails = await fetchItemDetails(itemId);
+            }
+        }
+    );
+},
+
+unmounted() {
+    if (this._unwatch) this._unwatch();
+}
+```
+
+**2. Cross-Component Coordination**
+```javascript
+import cartStore from './cart-store.js';
+
+mounted() {
+    this._unwatch = watch(
+        () => cartStore.state.items.length,
+        (count) => {
+            if (count > 10) {
+                notify('Cart is getting full!', 'warning');
+            }
+        }
+    );
+}
+```
+
+**3. Analytics/Logging**
+```javascript
+watch(
+    () => router.currentRoute.state.path,
+    (newPath) => {
+        analytics.trackPageView(newPath);
+    }
+);
+```
+
+**4. Watching Nested Properties**
+```javascript
+const state = reactive({ user: { settings: { theme: 'light' } } });
+
+watch(
+    () => state.user.settings.theme,
+    (newTheme) => {
+        document.body.classList.toggle('dark', newTheme === 'dark');
+    }
+);
+```
+
+### Important Notes
+
+- **Always dispose watchers** - Call the returned dispose function in `unmounted()` to prevent memory leaks
+- **Prefer props for derived values** - Use props directly in templates for reactive URL params (automatic re-renders)
+- **Avoid unnecessary watchers** - Computed properties are often better for derived values
+
 ## Dark Theme
 
 Global dark theme store with automatic body class management:

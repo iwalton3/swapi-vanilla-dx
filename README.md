@@ -1,6 +1,8 @@
-# Zero-Dependency Vanilla JavaScript Framework
+# VDX - Vanilla Developer Experience
 
-**EXPERIMENTAL** - A web framework as close to modern frameworks as possible, but with **ZERO npm dependencies**. In the age of code rot, supply chain vulnerabilities, and dependency chains too big to review, this project explores another path.
+**vdx-web** (core framework) + **vdx-ui** (component library)
+
+A web framework as close to modern frameworks as possible, but with **ZERO npm dependencies**. In the age of code rot, supply chain vulnerabilities, and dependency chains too big to review, this project explores another path.
 
 ## What Makes This Special
 
@@ -12,7 +14,7 @@ This is **not another JavaScript framework**. This is a statement about sustaina
 - **No build step** - Runs directly in the browser using ES6 modules
 - **Battle-tested core** - Vendored Preact (~4KB) for DOM reconciliation
 - **Modern DX** - Reactive state, components, routing, two-way binding
-- **Production ready** - 125 passing tests, XSS protection, used in real apps
+- **Production ready** - 230+ passing tests, XSS protection, used in real apps
 
 ### Technical Innovation
 
@@ -163,7 +165,7 @@ The innovative part is the **template compilation system** that converts `html``
 
 ```
 app/
-├── lib/                     # Framework library
+├── lib/                     # vdx-web: Core framework
 │   ├── framework.js         # Main barrel export (defineComponent, html, reactive, etc.)
 │   ├── router.js            # Router system
 │   ├── utils.js             # Utilities (notify, darkTheme, localStore, etc.)
@@ -176,18 +178,15 @@ app/
 │   └── vendor/
 │       └── preact/          # Vendored Preact 10.x (~4KB, no npm!)
 ├── dist/                    # Pre-bundled versions for embedding
-│   ├── framework.js         # Complete framework bundle (~74KB)
+│   ├── framework.js         # Complete framework bundle (~85KB)
 │   ├── router.js            # Standalone router (~10KB)
 │   └── utils.js             # Standalone utilities (~7KB)
-├── componentlib/            # Professional UI component library (cl-* components)
+├── componentlib/            # vdx-ui: Professional UI component library (cl-* prefix)
 ├── components/              # Shared UI components
-├── auth/                    # Authentication system
-├── apps/                    # Application modules
-│   └── pwgen/               # Password generators (3 variants)
 ├── playground/              # Interactive framework demos
 ├── bundle-demo/             # Examples using dist/ bundles
 ├── styles/                  # Global CSS
-├── tests/                   # Test suite (160 tests)
+├── tests/                   # Test suite (187 tests)
 └── index.html               # Entry point
 ```
 
@@ -218,26 +217,29 @@ import { defineComponent, html, reactive } from './dist/framework.js';
 - Perfect for demos and embedding
 - See `app/bundle-demo/` for examples
 
-## Interactive Playground
+## Live Demos
 
-View live demos of framework features:
+Start the server and explore:
 
 ```bash
 cd app
 python3 test-server.py
 ```
 
-Then open: **http://localhost:9000/playground.html**
+### Application Demos
 
-Features demonstrated:
-- **Counter** - Reactive state with x-model two-way binding
-- **Form** - Validation with x-model + on-input chaining
-- **List** - Todo list with each(), when(), and x-model
-- **Conditional** - Advanced when() patterns (nested, state machines)
-- **Nested** - Component composition and prop passing
-- **Notifications** - Toast notification system
-- **Computed** - Memoized properties for efficient filtering/sorting (1000 items)
-- **Virtual Scroll** - Efficiently render huge lists (only visible items)
+| Demo | URL | Description |
+|------|-----|-------------|
+| **E-commerce Shop** | [/apps/shop/](http://localhost:9000/apps/shop/) | Full shopping experience with product catalog, filtering, cart, and checkout flow. Demonstrates routing, state management, and responsive design. |
+| **Password Generator** | [/apps/pwgen/](http://localhost:9000/apps/pwgen/) | Secure passphrase generator with multiple generation modes and entropy calculation. |
+
+### Framework Showcases
+
+| Demo | URL | Description |
+|------|-----|-------------|
+| **Component Library** | [/componentlib/](http://localhost:9000/componentlib/) | Interactive showcase of all vdx-ui components (buttons, forms, dialogs, data tables, etc.) with live examples. |
+| **Playground** | [/playground.html](http://localhost:9000/playground.html) | Core framework features: reactive state, x-model binding, each/when helpers, computed properties, virtual scrolling. |
+| **Bundle Demo** | [/bundle-demo/](http://localhost:9000/bundle-demo/) | Examples using pre-bundled framework versions for embedding scenarios. |
 
 ## Running Tests
 
@@ -248,7 +250,7 @@ python3 test-server.py
 
 Then open: **http://localhost:9000/tests/**
 
-All 125 tests pass, covering:
+Tests cover:
 - Reactive state system
 - Template compilation and value application
 - Preact VNode generation
@@ -307,14 +309,9 @@ Requires modern browsers with ES6+ support:
 
 Since there's no build step, deployment is simple:
 
-1. Download `api.js` from your SWAPI server (if using backend):
-   ```bash
-   wget https://your-server.com/spa-api/.js -O app/api.js
-   ```
+1. Copy the `app/` directory to your web server
 
-2. Copy the `app/` directory to your web server
-
-3. Configure server routing if using HTML5 mode (see [docs/routing.md](docs/routing.md))
+2. Configure server routing if using HTML5 mode (see [docs/routing.md](docs/routing.md))
 
 That's it!
 
@@ -363,7 +360,7 @@ See LICENSE.md
 
 This is an experimental project, but PRs are welcome! Please ensure:
 - No npm dependencies are added
-- Tests pass (125 tests in `/app/tests/`)
+- Tests pass (see `/app/tests/` and `/componentlib-e2e/`)
 - Code follows existing patterns
 - Security best practices maintained
 

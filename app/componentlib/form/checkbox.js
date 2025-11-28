@@ -6,7 +6,7 @@ import { defineComponent, html, when } from '../../lib/framework.js';
 export default defineComponent('cl-checkbox', {
     props: {
         checked: false,
-        value: false,  // Used for x-model compatibility
+        value: null,  // Used for x-model compatibility - null means "not set by x-model"
         disabled: false,
         label: '',
         binary: true,

@@ -1,6 +1,6 @@
 /**
  * Custom Framework Bundle
- * Generated: 2025-11-28T09:04:23.037Z
+ * Generated: 2025-11-28T17:42:46.759Z
  *
  * Includes Preact (https://preactjs.com/)
  * Copyright (c) 2015-present Jason Miller
@@ -1972,6 +1972,38 @@ html._compiler = templateCompiler;
 
 // ============= template-compiler.js =============
 
+function getNestedValue(obj, path) {
+    if (!path || !obj) return undefined;
+    if (!path.includes('.')) return obj[path];
+
+    const parts = path.split('.');
+    let current = obj;
+    for (const part of parts) {
+        if (current === null || current === undefined) return undefined;
+        current = current[part];
+    }
+    return current;
+}
+
+function setNestedValue(obj, path, value) {
+    if (!path || !obj) return;
+    if (!path.includes('.')) {
+        obj[path] = value;
+        return;
+    }
+
+    const parts = path.split('.');
+    let current = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (current[part] === undefined || current[part] === null) {
+            current[part] = {};
+        }
+        current = current[part];
+    }
+    current[parts[parts.length - 1]] = value;
+}
+
 const templateCache = new Map();
 
 const MAX_CACHE_SIZE = 500;
@@ -2456,7 +2488,7 @@ function applyValues(compiled, values, component = null) {
             if (attrDef.xModel !== undefined) {
 
                 if (component && component.state) {
-                    value = component.state[attrDef.xModel];
+                    value = getNestedValue(component.state, attrDef.xModel);
 
                     if (attrDef.context === 'x-model-checked') {
                         value = !!value;
@@ -2612,7 +2644,7 @@ function applyValues(compiled, values, component = null) {
                             }
                         }
 
-                        component.state[propName] = value;
+                        setNestedValue(component.state, propName, value);
                     }
                 };
             } else if (eventDef.slot !== undefined) {

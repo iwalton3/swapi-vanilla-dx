@@ -361,34 +361,136 @@ export const componentExamples = {
 });`
     },
 
+    stepper: {
+        id: 'stepper',
+        name: 'Stepper',
+        category: 'panel',
+        description: 'Multi-step wizard/form component with validation',
+        demo: `<example-stepper></example-stepper>`,
+        source: `defineComponent('example-stepper', {
+    data() {
+        return {
+            steps: [
+                { label: 'Account', icon: '👤' },
+                { label: 'Profile', icon: '📝' },
+                { label: 'Confirm', icon: '✓' }
+            ],
+            currentStep: 0,
+            form: {
+                email: '',
+                password: '',
+                name: '',
+                bio: ''
+            }
+        };
+    },
+    methods: {
+        handleStepChange(e, detail) {
+            this.state.currentStep = detail.step;
+        },
+        handleValidate(e) {
+            const step = e.detail.step;
+            if (step === 0 && !this.state.form.email) {
+                alert('Please enter an email');
+                e.preventDefault();
+            }
+        },
+        handleComplete() {
+            alert('Form completed! ' + JSON.stringify(this.state.form));
+        }
+    },
+    template() {
+        return html\`
+            <cl-stepper
+                steps="\${this.state.steps}"
+                activeIndex="\${this.state.currentStep}"
+                linear="true"
+                on-change="handleStepChange"
+                on-validate="handleValidate"
+                on-complete="handleComplete">
+
+                <div slot="step-0" style="padding: 20px;">
+                    <h3>Create Account</h3>
+                    <cl-input-text label="Email" x-model="form.email" style="margin-bottom: 16px;"></cl-input-text>
+                    <cl-input-text label="Password" x-model="form.password"></cl-input-text>
+                </div>
+
+                <div slot="step-1" style="padding: 20px;">
+                    <h3>Your Profile</h3>
+                    <cl-input-text label="Full Name" x-model="form.name" style="margin-bottom: 16px;"></cl-input-text>
+                    <cl-textarea label="Bio" x-model="form.bio" rows="3"></cl-textarea>
+                </div>
+
+                <div slot="step-2" style="padding: 20px;">
+                    <h3>Review</h3>
+                    <p><strong>Email:</strong> \${this.state.form.email}</p>
+                    <p><strong>Name:</strong> \${this.state.form.name}</p>
+                    <p><strong>Bio:</strong> \${this.state.form.bio}</p>
+                </div>
+            </cl-stepper>
+        \`;
+    }
+});`
+    },
+
     // OVERLAY COMPONENTS
     dialog: {
         id: 'dialog',
         name: 'Dialog',
         category: 'overlay',
-        description: 'Modal dialog component',
+        description: 'Modal dialog component with optional footer buttons',
         demo: `<example-dialog></example-dialog>`,
         source: `defineComponent('example-dialog', {
     data() {
-        return { visible: false };
+        return { basicVisible: false, confirmVisible: false, formVisible: false };
+    },
+    methods: {
+        handleConfirm() {
+            alert('Confirmed!');
+            this.state.confirmVisible = false;
+        },
+        handleFormSubmit() {
+            alert('Form submitted!');
+            this.state.formVisible = false;
+        }
     },
     template() {
         return html\`
-            <div>
-                <cl-button
-                    label="Show Dialog"
-                    on-click="\${() => this.state.visible = true}">
-                </cl-button>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <!-- Basic Dialog -->
+                <cl-button label="Basic Dialog" on-click="\${() => this.state.basicVisible = true}"></cl-button>
 
-                <cl-dialog
-                    visible="\${this.state.visible}"
-                    header="Dialog Header"
-                    modal="true"
-                    closable="true"
-                    style="width: 500px;"
-                    on-change="\${(e, val) => this.state.visible = val}">
-                    <p>This is a modal dialog. Click outside or press the X to close.</p>
-                    <p>You can put any content here.</p>
+                <!-- Confirmation Dialog -->
+                <cl-button label="Confirmation" severity="warning" on-click="\${() => this.state.confirmVisible = true}"></cl-button>
+
+                <!-- Form Dialog -->
+                <cl-button label="Form Dialog" severity="success" on-click="\${() => this.state.formVisible = true}"></cl-button>
+
+                <!-- Basic Dialog -->
+                <cl-dialog visible="\${this.state.basicVisible}" header="Basic Dialog" style="width: 500px;"
+                    on-change="\${(e, val) => this.state.basicVisible = val}">
+                    <p>This is a basic dialog with just content.</p>
+                </cl-dialog>
+
+                <!-- Confirmation Dialog with Footer -->
+                <cl-dialog visible="\${this.state.confirmVisible}" header="Confirm Action" style="width: 400px;"
+                    on-change="\${(e, val) => this.state.confirmVisible = val}">
+                    <p>Are you sure you want to proceed with this action?</p>
+                    <div slot="footer">
+                        <cl-button label="Cancel" severity="secondary" on-click="\${() => this.state.confirmVisible = false}"></cl-button>
+                        <cl-button label="Confirm" severity="primary" on-click="handleConfirm"></cl-button>
+                    </div>
+                </cl-dialog>
+
+                <!-- Form Dialog with Footer -->
+                <cl-dialog visible="\${this.state.formVisible}" header="Edit Profile" style="width: 500px;"
+                    on-change="\${(e, val) => this.state.formVisible = val}">
+                    <cl-input-text label="Name" placeholder="Enter name..."></cl-input-text>
+                    <cl-input-text label="Email" placeholder="Enter email..." style="margin-top: 16px;"></cl-input-text>
+                    <div slot="footer">
+                        <cl-button label="Cancel" severity="secondary" text="true" on-click="\${() => this.state.formVisible = false}"></cl-button>
+                        <cl-button label="Save Changes" severity="primary" on-click="handleFormSubmit"></cl-button>
+                    </div>
                 </cl-dialog>
             </div>
         \`;
@@ -629,6 +731,183 @@ toast.show({
             <div style="padding: 40px; background: \${this.state.color};">
                 Selected Color
             </div>
+        \`;
+    }
+});`
+    },
+
+    // LAYOUT COMPONENTS
+    shell: {
+        id: 'shell',
+        name: 'Shell',
+        category: 'layout',
+        description: 'Responsive application shell with top bar, sidebar, and hamburger menu',
+        demo: `<example-shell></example-shell>`,
+        source: `defineComponent('my-app', {
+    data() {
+        return {
+            activeItem: 'dashboard',
+            menuItems: [
+                {
+                    label: 'Main',
+                    icon: '🏠',
+                    items: [
+                        { label: 'Dashboard', key: 'dashboard' },
+                        { label: 'Analytics', key: 'analytics' }
+                    ]
+                },
+                {
+                    label: 'Settings',
+                    icon: '⚙️',
+                    items: [
+                        { label: 'Profile', key: 'profile' },
+                        { label: 'Preferences', key: 'preferences' }
+                    ]
+                },
+                { label: 'Help', icon: '❓', key: 'help' }
+            ]
+        };
+    },
+    template() {
+        return html\`
+            <cl-shell
+                title="My App"
+                subtitle="Dashboard"
+                menuItems="\${this.state.menuItems}"
+                activeItem="\${this.state.activeItem}"
+                on-change="\${(e, key) => this.state.activeItem = key}">
+
+                <div slot="topbar">
+                    <button>Notifications</button>
+                </div>
+
+                <h2>Welcome to \${this.state.activeItem}</h2>
+                <p>Main content area</p>
+            </cl-shell>
+        \`;
+    }
+});`
+    },
+
+    // FORM EXAMPLE (Complete Form)
+    completeForm: {
+        id: 'completeForm',
+        name: 'Complete Form',
+        category: 'form',
+        description: 'Full form example with multiple component types, labels, and submit button',
+        demo: `<example-complete-form></example-complete-form>`,
+        source: `defineComponent('example-complete-form', {
+    data() {
+        return {
+            form: {
+                firstName: '',
+                lastName: '',
+                email: '',
+                phone: '',
+                birthDate: '',
+                gender: 'other',
+                country: null,
+                interests: [],
+                bio: '',
+                newsletter: false,
+                notifications: true,
+                experience: 3
+            },
+            countries: [
+                { label: 'United States', value: 'us' },
+                { label: 'United Kingdom', value: 'uk' },
+                { label: 'Canada', value: 'ca' },
+                { label: 'Australia', value: 'au' },
+                { label: 'Germany', value: 'de' }
+            ],
+            interestOptions: [
+                { label: 'Technology', value: 'tech' },
+                { label: 'Design', value: 'design' },
+                { label: 'Business', value: 'business' },
+                { label: 'Science', value: 'science' }
+            ]
+        };
+    },
+    methods: {
+        handleSubmit() {
+            console.log('Form submitted:', this.state.form);
+            alert('Form submitted! Check console for data.');
+        },
+        handleReset() {
+            this.state.form = {
+                firstName: '', lastName: '', email: '', phone: '',
+                birthDate: '', gender: 'other', country: null,
+                interests: [], bio: '', newsletter: false,
+                notifications: true, experience: 3
+            };
+        }
+    },
+    template() {
+        return html\`
+            <cl-card header="User Registration">
+                <div class="form-grid">
+                    <!-- Row 1: Name -->
+                    <cl-input-text label="First Name" required="true" x-model="form.firstName"></cl-input-text>
+                    <cl-input-text label="Last Name" required="true" x-model="form.lastName"></cl-input-text>
+
+                    <!-- Row 2: Contact -->
+                    <cl-input-text label="Email" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$" required="true" x-model="form.email"></cl-input-text>
+                    <cl-input-text label="Phone" placeholder="+1 (555) 000-0000" x-model="form.phone"></cl-input-text>
+
+                    <!-- Row 3: Date & Country -->
+                    <cl-calendar label="Birth Date" x-model="form.birthDate"></cl-calendar>
+                    <cl-dropdown label="Country" options="\${this.state.countries}" placeholder="Select country" x-model="form.country"></cl-dropdown>
+
+                    <!-- Row 4: Gender -->
+                    <div class="form-full">
+                        <label class="form-label">Gender</label>
+                        <div class="radio-group">
+                            <cl-radio-button name="gender" value="male" label="Male" modelvalue="\${this.state.form.gender}" on-change="\${(e, v) => this.state.form.gender = v}"></cl-radio-button>
+                            <cl-radio-button name="gender" value="female" label="Female" modelvalue="\${this.state.form.gender}" on-change="\${(e, v) => this.state.form.gender = v}"></cl-radio-button>
+                            <cl-radio-button name="gender" value="other" label="Other" modelvalue="\${this.state.form.gender}" on-change="\${(e, v) => this.state.form.gender = v}"></cl-radio-button>
+                        </div>
+                    </div>
+
+                    <!-- Row 5: Interests -->
+                    <div class="form-full">
+                        <cl-multiselect label="Interests" options="\${this.state.interestOptions}" x-model="form.interests"></cl-multiselect>
+                    </div>
+
+                    <!-- Row 6: Bio -->
+                    <div class="form-full">
+                        <cl-textarea label="Bio" rows="3" maxlength="500" showcount="true" x-model="form.bio"></cl-textarea>
+                    </div>
+
+                    <!-- Row 7: Experience -->
+                    <div class="form-full">
+                        <cl-slider label="Years of Experience" min="0" max="20" x-model="form.experience"></cl-slider>
+                    </div>
+
+                    <!-- Row 8: Checkboxes -->
+                    <div class="form-full checkbox-group">
+                        <cl-checkbox label="Subscribe to newsletter" x-model="form.newsletter"></cl-checkbox>
+                        <cl-checkbox label="Enable notifications" x-model="form.notifications"></cl-checkbox>
+                    </div>
+                </div>
+
+                <div slot="footer" class="form-actions">
+                    <cl-button label="Reset" severity="secondary" text="true" on-click="handleReset"></cl-button>
+                    <cl-button label="Submit" severity="primary" icon="✓" on-click="handleSubmit"></cl-button>
+                </div>
+            </cl-card>
+
+            <style>
+                .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+                .form-full { grid-column: 1 / -1; }
+                .form-label { display: block; font-weight: 500; margin-bottom: 8px; color: #333; }
+                .radio-group { display: flex; gap: 24px; }
+                .checkbox-group { display: flex; gap: 24px; }
+                .form-actions { display: flex; gap: 12px; justify-content: flex-end; }
+                @media (max-width: 600px) {
+                    .form-grid { grid-template-columns: 1fr; }
+                    .radio-group, .checkbox-group { flex-direction: column; gap: 12px; }
+                }
+            </style>
         \`;
     }
 });`

@@ -96,6 +96,54 @@ describe('Reactivity System', function(it) {
         assert.equal(oldValue, 0, 'Watch callback should receive old value');
     });
 
+    it('watch returns dispose function that stops watching', () => {
+        const obj = reactive({ value: 0 });
+        let callCount = 0;
+
+        const dispose = watch(
+            () => obj.value,
+            () => { callCount++; }
+        );
+
+        obj.value = 1;
+        assert.equal(callCount, 1, 'Watch should fire on first change');
+
+        dispose();
+
+        obj.value = 2;
+        obj.value = 3;
+        assert.equal(callCount, 1, 'Watch should not fire after dispose');
+    });
+
+    it('watch tracks nested object properties', () => {
+        const obj = reactive({ user: { name: 'Alice' } });
+        let watchedName = null;
+
+        watch(
+            () => obj.user.name,
+            (newName) => { watchedName = newName; }
+        );
+
+        obj.user.name = 'Bob';
+        assert.equal(watchedName, 'Bob', 'Watch should track nested property changes');
+    });
+
+    it('watch does not fire on equal value assignment', () => {
+        const obj = reactive({ count: 5 });
+        let callCount = 0;
+
+        watch(
+            () => obj.count,
+            () => { callCount++; }
+        );
+
+        obj.count = 5; // Same value
+        assert.equal(callCount, 0, 'Watch should not fire when value does not change');
+
+        obj.count = 6; // Different value
+        assert.equal(callCount, 1, 'Watch should fire when value changes');
+    });
+
     it('handles array mutations', () => {
         const arr = reactive({ items: [1, 2, 3] });
         let sum = 0;

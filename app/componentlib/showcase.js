@@ -1,10 +1,13 @@
 /**
- * Component Showcase
+ * Component Showcase - VDX-UI Component Library
  */
 import { defineComponent, html, when, each, raw } from '../lib/framework.js';
 
 // Import all example components (which also import the library components)
 import './example-components.js';
+
+// Import shell component
+import './layout/shell.js';
 
 import { componentExamples } from './examples.js';
 
@@ -15,13 +18,14 @@ export default defineComponent('component-showcase', {
             selectedTab: 'demo',
             searchQuery: '',
             categories: [
-                { name: 'Form', key: 'form' },
-                { name: 'Selection', key: 'selection' },
-                { name: 'Data', key: 'data' },
-                { name: 'Panel', key: 'panel' },
-                { name: 'Overlay', key: 'overlay' },
-                { name: 'Button', key: 'button' },
-                { name: 'Misc', key: 'misc' }
+                { name: 'Form', key: 'form', icon: '📝' },
+                { name: 'Selection', key: 'selection', icon: '☑️' },
+                { name: 'Data', key: 'data', icon: '📊' },
+                { name: 'Panel', key: 'panel', icon: '📦' },
+                { name: 'Overlay', key: 'overlay', icon: '🪟' },
+                { name: 'Button', key: 'button', icon: '🔘' },
+                { name: 'Layout', key: 'layout', icon: '📐' },
+                { name: 'Misc', key: 'misc', icon: '🧩' }
             ]
         };
     },
@@ -64,55 +68,89 @@ export default defineComponent('component-showcase', {
             return filtered;
         },
 
+        getMenuItems() {
+            const filteredComponents = this.getFilteredComponents();
+            const hasSearch = this.state.searchQuery.trim().length > 0;
+
+            // When searching, return flat list of matching components for easier browsing
+            if (hasSearch) {
+                return Object.values(filteredComponents).map(comp => ({
+                    label: comp.name,
+                    icon: this.getCategoryIcon(comp.category),
+                    key: comp.id
+                }));
+            }
+
+            // Normal view - show categories with sub-items
+            return this.state.categories
+                .map(category => {
+                    const components = this.getComponentsByCategory(category.key);
+                    const visibleComponents = components.filter(c => filteredComponents[c.id]);
+                    if (visibleComponents.length === 0) return null;
+
+                    return {
+                        label: category.name,
+                        icon: category.icon,
+                        key: category.key,
+                        items: visibleComponents.map(comp => ({
+                            label: comp.name,
+                            key: comp.id
+                        }))
+                    };
+                })
+                .filter(Boolean);
+        },
+
+        getCategoryIcon(categoryKey) {
+            const category = this.state.categories.find(c => c.key === categoryKey);
+            return category ? category.icon : '';
+        },
+
+        handleMenuChange(e, key) {
+            const component = componentExamples[key];
+            if (component) {
+                this.selectComponent(component);
+            }
+        },
+
         handleSearch(e) {
             this.state.searchQuery = e.target.value;
+        },
+
+        handleSearchKeydown(e) {
+            // On Enter key, open the sidebar on mobile to show search results
+            if (e.key === 'Enter') {
+                const shell = this.querySelector('cl-shell');
+                if (shell && shell.state && shell.state.isMobile && !shell.state.sidebarOpen) {
+                    shell.state.sidebarOpen = true;
+                }
+                e.preventDefault();
+            }
         }
     },
 
     template() {
         const current = this.state.selectedComponent;
-        const filteredComponents = this.getFilteredComponents();
+        const menuItems = this.getMenuItems();
 
         return html`
-            <div class="showcase-container">
-                <div class="sidebar">
-                    <div class="sidebar-header">
-                        <h1>Component Library</h1>
-                        <p>Professional UI components for the framework</p>
-                    </div>
+            <cl-shell
+                title="VDX-UI"
+                subtitle="Component Library"
+                menuItems="${menuItems}"
+                activeItem="${current ? current.id : null}"
+                on-change="handleMenuChange">
 
-                    <div class="search-box">
-                        <input
-                            type="text"
-                            placeholder="Search components..."
-                            value="${this.state.searchQuery}"
-                            on-input="handleSearch">
-                    </div>
-
-                    <div class="components-list">
-                        ${each(this.state.categories, category => {
-                            const components = this.getComponentsByCategory(category.key);
-                            const visible = components.some(c => filteredComponents[c.id]);
-
-                            return when(visible, html`
-                                <div class="category">
-                                    <div class="category-header">${category.name}</div>
-                                    ${each(components, component => {
-                                        return when(filteredComponents[component.id], html`
-                                            <div
-                                                class="component-item ${current && current.id === component.id ? 'active' : ''}"
-                                                on-click="${() => this.selectComponent(component)}">
-                                                ${component.name}
-                                            </div>
-                                        `);
-                                    })}
-                                </div>
-                            `);
-                        })}
-                    </div>
+                <div slot="topbar" class="topbar-search">
+                    <input
+                        type="text"
+                        placeholder="Search components..."
+                        value="${this.state.searchQuery}"
+                        on-input="handleSearch"
+                        on-keydown="handleSearchKeydown">
                 </div>
 
-                <div class="main-content">
+                <div class="showcase-content">
                     ${when(current, html`
                         <div class="component-view">
                             <div class="component-header">
@@ -149,113 +187,46 @@ export default defineComponent('component-showcase', {
                         </div>
                     `, html`
                         <div class="empty-state">
-                            <h2>Welcome to Component Library</h2>
+                            <h2>Welcome to VDX-UI</h2>
                             <p>Select a component from the sidebar to view examples</p>
                         </div>
                     `)}
                 </div>
-            </div>
+            </cl-shell>
         `;
     },
 
     styles: `
-        .showcase-container {
-            display: flex;
+        :host {
+            display: block;
             height: 100vh;
         }
 
-        .sidebar {
-            width: 280px;
-            background: white;
-            border-right: 1px solid #e0e0e0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .sidebar-header {
-            padding: 24px 20px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .sidebar-header h1 {
-            margin: 0 0 8px 0;
-            font-size: 20px;
-            color: #333;
-        }
-
-        .sidebar-header p {
-            margin: 0;
-            font-size: 13px;
-            color: #6c757d;
-        }
-
-        .search-box {
-            padding: 16px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .search-box input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ced4da;
+        .topbar-search input {
+            padding: 6px 12px;
+            border: none;
             border-radius: 4px;
+            background: rgba(255,255,255,0.2);
+            color: white;
             font-size: 14px;
+            width: 200px;
         }
 
-        .search-box input:focus {
+        .topbar-search input::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+
+        .topbar-search input:focus {
             outline: none;
-            border-color: #007bff;
+            background: rgba(255,255,255,0.3);
         }
 
-        .components-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px 0;
-        }
-
-        .category {
-            margin-bottom: 8px;
-        }
-
-        .category-header {
-            padding: 12px 20px 8px 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: #6c757d;
-            letter-spacing: 0.5px;
-        }
-
-        .component-item {
-            padding: 10px 20px;
-            font-size: 14px;
-            color: #333;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .component-item:hover {
-            background: #f8f9fa;
-        }
-
-        .component-item.active {
-            background: #e7f3ff;
-            color: #007bff;
-            font-weight: 500;
-            border-right: 3px solid #007bff;
-        }
-
-        .main-content {
-            flex: 1;
-            overflow-y: auto;
-            background: #f5f5f5;
+        .showcase-content {
+            height: 100%;
         }
 
         .component-view {
             max-width: 1200px;
-            margin: 0 auto;
-            padding: 32px;
         }
 
         .component-header {
@@ -301,9 +272,9 @@ export default defineComponent('component-showcase', {
         }
 
         .tab.active {
-            color: #007bff;
+            color: #1976d2;
             background: white;
-            box-shadow: 0 -2px 0 #007bff inset;
+            box-shadow: 0 -2px 0 #1976d2 inset;
         }
 
         .tab-content {
@@ -341,7 +312,7 @@ export default defineComponent('component-showcase', {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
+            height: 400px;
             text-align: center;
             color: #6c757d;
         }
@@ -354,6 +325,33 @@ export default defineComponent('component-showcase', {
         .empty-state p {
             margin: 0;
             font-size: 15px;
+        }
+
+        @media (max-width: 767px) {
+            .topbar-search input {
+                width: 140px;
+            }
+
+            .component-header {
+                padding: 16px;
+            }
+
+            .component-header h2 {
+                font-size: 22px;
+            }
+
+            .tabs {
+                overflow-x: auto;
+            }
+
+            .tab {
+                padding: 10px 16px;
+                white-space: nowrap;
+            }
+
+            .tab-content {
+                padding: 16px;
+            }
         }
     `
 });

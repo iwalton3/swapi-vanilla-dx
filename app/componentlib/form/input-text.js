@@ -38,13 +38,30 @@ export default defineComponent('cl-input-text', {
 
     methods: {
         handleInput(e) {
+            if (!e.target) return;
             const value = e.target.value;
             this.state.internalValue = value;
             this.validateInput(value);
+            // Emit both input and change events for flexibility
+            this.emitInput(e, value);
             this.emitChange(e, value);
         },
 
+        emitInput(e, value) {
+            // Stop the native event from bubbling
+            if (e && e.stopPropagation) {
+                e.stopPropagation();
+            }
+            // Emit CustomEvent with detail for on-input handlers
+            this.dispatchEvent(new CustomEvent('input', {
+                bubbles: true,
+                composed: true,
+                detail: { value }
+            }));
+        },
+
         handleBlur(e) {
+            if (!e.target) return;
             this.validateInput(e.target.value);
         },
 

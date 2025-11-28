@@ -20,6 +20,50 @@ import { sanitizeUrl, isHtml, isRaw } from './template.js';
 import { h, Fragment } from '../vendor/preact/index.js';
 
 /**
+ * Get a nested value from an object using a dot-separated path
+ * @param {Object} obj - The object to traverse
+ * @param {string} path - Dot-separated path like "form.interests"
+ * @returns {*} The value at the path, or undefined if not found
+ */
+function getNestedValue(obj, path) {
+    if (!path || !obj) return undefined;
+    if (!path.includes('.')) return obj[path];
+
+    const parts = path.split('.');
+    let current = obj;
+    for (const part of parts) {
+        if (current === null || current === undefined) return undefined;
+        current = current[part];
+    }
+    return current;
+}
+
+/**
+ * Set a nested value in an object using a dot-separated path
+ * @param {Object} obj - The object to modify
+ * @param {string} path - Dot-separated path like "form.interests"
+ * @param {*} value - The value to set
+ */
+function setNestedValue(obj, path, value) {
+    if (!path || !obj) return;
+    if (!path.includes('.')) {
+        obj[path] = value;
+        return;
+    }
+
+    const parts = path.split('.');
+    let current = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (current[part] === undefined || current[part] === null) {
+            current[part] = {};
+        }
+        current = current[part];
+    }
+    current[parts[parts.length - 1]] = value;
+}
+
+/**
  * @typedef {Object} CompiledTextNode
  * @property {'text'} type - Node type
  * @property {string} [value] - Static text content
@@ -658,9 +702,9 @@ export function applyValues(compiled, values, component = null) {
             let value;
 
             if (attrDef.xModel !== undefined) {
-                // x-model binding: get value from component state
+                // x-model binding: get value from component state (supports nested paths like "form.interests")
                 if (component && component.state) {
-                    value = component.state[attrDef.xModel];
+                    value = getNestedValue(component.state, attrDef.xModel);
 
                     // For checked attribute (checkbox), ensure boolean
                     if (attrDef.context === 'x-model-checked') {
@@ -826,7 +870,7 @@ export function applyValues(compiled, values, component = null) {
                             }
                         }
 
-                        component.state[propName] = value;
+                        setNestedValue(component.state, propName, value);
                     }
                 };
             } else if (eventDef.slot !== undefined) {

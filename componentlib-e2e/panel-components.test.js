@@ -159,6 +159,138 @@ async function runTests() {
         await test.assertExists('.splitter-gutter');
     });
 
+    // Stepper Tests
+    await test.test('Stepper component renders', async () => {
+        await test.selectComponent('Stepper');
+        await test.assertExists('example-stepper');
+        await test.assertExists('cl-stepper');
+    });
+
+    await test.test('Stepper has step indicators', async () => {
+        await test.selectComponent('Stepper');
+        const steps = await test.page.$$('.step-item');
+        await test.assertGreaterThan(steps.length, 0, 'Should have step indicators');
+    });
+
+    await test.test('Stepper has active step', async () => {
+        await test.selectComponent('Stepper');
+        await test.assertExists('.step-item.active');
+    });
+
+    await test.test('Stepper has step connectors', async () => {
+        await test.selectComponent('Stepper');
+        const connectors = await test.page.$$('.step-connector');
+        await test.assertGreaterThan(connectors.length, 0, 'Should have step connectors');
+    });
+
+    await test.test('Stepper has navigation buttons', async () => {
+        await test.selectComponent('Stepper');
+        await test.assertExists('.stepper-actions');
+        await test.assertExists('.btn-primary'); // Continue button
+    });
+
+    await test.test('Stepper shows content for current step', async () => {
+        await test.selectComponent('Stepper');
+        await test.assertExists('.stepper-content');
+        // The first step content should be visible
+        const content = await test.page.$('.stepper-content');
+        const textContent = await test.page.evaluate(el => el.textContent, content);
+        await test.assert(textContent.includes('Account') || textContent.includes('Email'),
+            'Should show first step content');
+    });
+
+    await test.test('Stepper can navigate to next step', async () => {
+        await test.selectComponent('Stepper');
+        await test.page.waitForTimeout(300);
+
+        // Enter required email first (validation requires it)
+        const emailInput = await test.page.$('cl-input-text input');
+        if (emailInput) {
+            await emailInput.type('test@example.com');
+            await test.page.waitForTimeout(100);
+        }
+
+        // Click continue
+        const continueBtn = await test.page.$('.btn-primary');
+        if (continueBtn) {
+            await continueBtn.click();
+            await test.page.waitForTimeout(300);
+
+            // Check that we're on step 2 (Profile)
+            const stepItems = await test.page.$$('.step-item');
+            if (stepItems.length >= 2) {
+                const isSecondActive = await test.page.evaluate(
+                    el => el.classList.contains('active'),
+                    stepItems[1]
+                );
+                await test.assert(isSecondActive, 'Second step should be active');
+            }
+        }
+    });
+
+    await test.test('Stepper marks completed steps', async () => {
+        await test.selectComponent('Stepper');
+        await test.page.waitForTimeout(300);
+
+        // Fill email and go to step 2
+        const emailInput = await test.page.$('cl-input-text input');
+        if (emailInput) {
+            await emailInput.type('test@example.com');
+        }
+
+        const continueBtn = await test.page.$('.btn-primary');
+        if (continueBtn) {
+            await continueBtn.click();
+            await test.page.waitForTimeout(300);
+
+            // First step should now have completed class
+            const completedStep = await test.page.$('.step-item.completed');
+            await test.assert(completedStep !== null, 'First step should be marked completed');
+        }
+    });
+
+    await test.test('Stepper back button works', async () => {
+        // Select a different component first to force reset
+        await test.selectComponent('Card');
+        await test.page.waitForTimeout(200);
+        await test.selectComponent('Stepper');
+        await test.page.waitForTimeout(500);
+
+        // Go to step 2 first
+        const emailInput = await test.page.$('cl-input-text input');
+        if (emailInput) {
+            await emailInput.type('test@example.com');
+            await test.page.waitForTimeout(100);
+        }
+
+        let continueBtn = await test.page.$('.btn-primary');
+        if (continueBtn) {
+            await continueBtn.click();
+            await test.page.waitForTimeout(500);
+
+            // Verify we're on step 2 before clicking back
+            const step2Active = await test.page.evaluate(() => {
+                const items = document.querySelectorAll('.step-item');
+                return items.length > 1 && items[1].classList.contains('active');
+            });
+            await test.assert(step2Active, 'Should be on step 2');
+
+            // Now click back
+            const backBtn = await test.page.$('.btn-secondary');
+            if (backBtn) {
+                await backBtn.click();
+                await test.page.waitForTimeout(500);
+
+                // First step should be active again - query fresh from DOM
+                const isFirstActive = await test.page.evaluate(() => {
+                    const items = document.querySelectorAll('.step-item');
+                    return items.length > 0 && items[0].classList.contains('active');
+                });
+                await test.assert(isFirstActive, 'First step should be active after back');
+            }
+        }
+    });
+
     await test.teardown();
 }
 

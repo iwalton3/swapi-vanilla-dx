@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a web application that uses a **custom zero-dependency vanilla JavaScript framework** (in `/app/`). The application is a client for the SWAPI (Simple Web API) server with authentication and various tools. The framework requires **no build step** - it runs directly in the browser using ES6 modules.
+**VDX - Vanilla Developer Experience** consists of:
+- **vdx-web**: Core framework (in `/app/lib/`) - Zero-dependency reactive web framework
+- **vdx-ui**: Component library (in `/app/componentlib/`) - Professional UI components (cl-* prefix)
+
+The framework requires **no build step** - it runs directly in the browser using ES6 modules.
 
 ## Quick Start
 
@@ -30,15 +34,14 @@ Then open: http://localhost:9000/
 
 ```
 app/
-├── lib/                     # Framework library
+├── lib/                     # vdx-web: Core framework
 │   ├── framework.js         # Main barrel export (defineComponent, html, reactive, etc.)
 │   ├── router.js            # Router system
 │   ├── utils.js             # Utilities (notify, darkTheme, localStore, etc.)
 │   └── core/                # Framework internals (~3000 lines)
 ├── dist/                    # Pre-bundled versions for embedding
-├── componentlib/            # Professional UI component library (cl-* components)
+├── componentlib/            # vdx-ui: Professional UI component library (cl-* prefix)
 ├── components/              # Reusable UI components
-├── auth/                    # Authentication system
 ├── apps/                    # Application modules
 ├── tests/                   # Comprehensive unit tests (187 tests)
 └── index.html               # Entry point
@@ -526,19 +529,6 @@ For detailed information, see:
 - **[docs/api-reference.md](docs/api-reference.md)** - Complete API reference
 
 For project overview and quickstart, see [README.md](README.md).
-
-## Backend (SWAPI Server)
-
-**Note**: The `backend` and `backend-apps` directories are symlinks to `../swapi/server/` and `../swapi-apps/`. **Do NOT modify these from this repository.**
-
-### SWAPI Framework
-
-Python-based web API framework built on Werkzeug:
-- Decorator-based API registration: `@api.add(require=capability)`
-- Auto-generated client libraries (`.js`, `.py` endpoints)
-- Email-based OTP authentication
-- Role hierarchy and capability system
-- SQLAlchemy database backend
 
 ## Common Anti-Patterns to Avoid
 

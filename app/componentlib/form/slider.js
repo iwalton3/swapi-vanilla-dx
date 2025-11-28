@@ -36,6 +36,20 @@ export default defineComponent('cl-slider', {
         handleInput(e) {
             const value = parseFloat(e.target.value);
             this.state.internalValue = value;
+            // Stop native event from bubbling
+            if (e && e.stopPropagation) {
+                e.stopPropagation();
+            }
+            this.emitChange(e, value);
+        },
+
+        handleChange(e) {
+            // Native change event fires on release - stop it and emit our own
+            if (e && e.stopPropagation) {
+                e.stopPropagation();
+            }
+            const value = parseFloat(e.target.value);
+            this.state.internalValue = value;
             this.emitChange(e, value);
         }
     },
@@ -62,6 +76,7 @@ export default defineComponent('cl-slider', {
                         value="${this.state.internalValue}"
                         disabled="${this.props.disabled}"
                         on-input="handleInput"
+                        on-change="handleChange"
                         style="--percentage: ${percentage}%">
                 </div>
             </div>

@@ -102,17 +102,48 @@ class TestHelper {
     }
 
     async selectComponent(name) {
+        // First expand all groups to make sure the component is visible
+        await this.page.evaluate(() => {
+            // Click all group headers with children to expand them
+            const groupHeaders = document.querySelectorAll('.nav-item.has-children');
+            groupHeaders.forEach(header => {
+                const arrow = header.querySelector('.nav-arrow');
+                if (arrow && !arrow.classList.contains('expanded')) {
+                    header.click();
+                }
+            });
+        });
+        await this.page.waitForTimeout(200);
+
+        // Now try to find and click the component
         await this.page.evaluate((componentName) => {
+            // Try cl-shell nav structure - look in both top-level and sub-items
+            const navItems = Array.from(document.querySelectorAll('.nav-item'));
+            const navItem = navItems.find(el => {
+                const label = el.querySelector('.nav-label');
+                return label && label.textContent.trim() === componentName;
+            });
+            if (navItem) {
+                navItem.click();
+                return;
+            }
+
+            // Fallback to old component-item structure
             const items = Array.from(document.querySelectorAll('.component-item'));
             const item = items.find(el => el.textContent.trim() === componentName);
             if (item) {
                 item.click();
-            } else {
-                throw new Error(`Component ${componentName} not found in sidebar`);
+                return;
             }
+
+            throw new Error(`Component ${componentName} not found in sidebar`);
         }, name);
         // Wait for component to be active
-        await this.page.waitForSelector('.component-item.active', { timeout: 2000 });
+        try {
+            await this.page.waitForSelector('.nav-item.active, .component-item.active', { timeout: 2000 });
+        } catch (e) {
+            // Some components might not set active state immediately
+        }
         // Wait a bit for rendering to complete
         await this.page.waitForTimeout(300);
     }

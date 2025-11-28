@@ -208,6 +208,26 @@ export default defineComponent('cl-button', {
             color: var(--primary-color, #007bff);
         }
 
+        .cl-button.text.secondary {
+            color: #6c757d;
+        }
+
+        .cl-button.text.success {
+            color: #28a745;
+        }
+
+        .cl-button.text.danger {
+            color: #dc3545;
+        }
+
+        .cl-button.text.warning {
+            color: #856404;
+        }
+
+        .cl-button.text.info {
+            color: #17a2b8;
+        }
+
         .cl-button.text:hover:not(:disabled) {
             background: rgba(0, 0, 0, 0.05);
         }

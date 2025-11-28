@@ -8,6 +8,13 @@
     },
     {
         "spa": false,
+        "name": "VDX Shop",
+        "path": "apps/shop/",
+        "icon": "/theme/terminal.svg",
+        "info": "E-commerce demo showcasing router, stores, and UI components - product catalog, filtering, cart with localStorage persistence, and checkout flow."
+    },
+    {
+        "spa": false,
         "name": "Playground",
         "path": "playground.html",
         "icon": "/theme/terminal.svg",
