@@ -76,6 +76,24 @@ export default defineComponent('user-manager', {
         }
     },
 
+    styles: `
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        td, th {
+            padding: 8px;
+            text-align: left;
+        }
+
+        @media (max-width: 600px) {
+            td, th {
+                padding: 4px;
+            }
+        }
+    `,
+
     template() {
         return html`
             <div>

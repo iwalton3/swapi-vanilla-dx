@@ -2,6 +2,16 @@
 
 import { createStore, pruneTemplateCache } from './framework.js';
 
+let _router = null;
+
+export function getRouter() {
+    return _router;
+}
+
+export function setRouter(router) {
+    _router = router;
+}
+
 function parseQuery(queryString) {
     if (!queryString) return {};
 

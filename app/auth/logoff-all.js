@@ -3,6 +3,7 @@
  */
 import { defineComponent } from '../lib/framework.js';
 import { html } from '../lib/framework.js';
+import { getRouter } from '../lib/router.js';
 import login from './auth.js';
 import { notify } from '../lib/utils.js';
 import '../components/icon.js';
@@ -13,8 +14,9 @@ export default defineComponent('auth-logoff-all', {
             const state = login.state;
             await state.logoff_all();
             notify('Logoff successful.');
-            if (window.router) {
-                window.router.navigate('/');
+            const router = getRouter();
+            if (router) {
+                router.navigate('/');
             }
         }
     },

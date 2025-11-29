@@ -31,16 +31,16 @@ export default defineComponent('remote-control', {
 
     styles: `
         .section {
-            margin-bottom: 5px;
-            margin-top: 20px;
+            margin-bottom: 3px;
+            margin-top: 12px;
             padding-bottom: 2px;
             border-bottom: solid 1px;
             font-weight: bold;
-            font-size: 30px;
+            font-size: 20px;
         }
 
         .area {
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             clear: both;
             overflow: auto;
         }
@@ -51,12 +51,12 @@ export default defineComponent('remote-control', {
 
         .buttons remote-button {
             display: inline-block;
-            margin-left: 5px;
+            margin-left: 3px;
         }
 
         .title {
-            font-size: 20px;
-            line-height: 30px;
+            font-size: 18px;
+            line-height: 18px;
         }
     `,
 

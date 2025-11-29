@@ -14,6 +14,26 @@
 
 import { createStore, pruneTemplateCache } from './framework.js';
 
+// Singleton router instance
+let _router = null;
+
+/**
+ * Get the singleton router instance
+ * @returns {Router|null} The router instance, or null if not set
+ */
+export function getRouter() {
+    return _router;
+}
+
+/**
+ * Set the singleton router instance
+ * @param {Router} router - The router instance to use as singleton
+ * @returns {void}
+ */
+export function setRouter(router) {
+    _router = router;
+}
+
 /**
  * Parse query string into object
  * @private

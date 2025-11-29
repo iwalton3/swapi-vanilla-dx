@@ -41,8 +41,8 @@ export default defineComponent('remote-button', {
 
         button {
             margin: 0;
-            font-size: 25px;
-            padding: 5px 10px;
+            font-size: 20px;
+            padding: 4px 8px;
             line-height: 1.2;
 
             /* Use CSS variables for dark theme support */

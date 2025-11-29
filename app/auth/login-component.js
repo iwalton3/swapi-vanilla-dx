@@ -3,6 +3,7 @@
  */
 import { defineComponent } from '../lib/framework.js';
 import { html } from '../lib/framework.js';
+import { getRouter } from '../lib/router.js';
 import login from './auth.js';
 import { notify } from '../lib/utils.js';
 
@@ -39,8 +40,9 @@ export default defineComponent('login-component', {
                 notify('Login failed. Please try again.', 'error');
             } else {
                 notify('Login successful.');
-                if (this.props.after && window.router) {
-                    window.router.navigate(this.props.after);
+                const router = getRouter();
+                if (this.props.after && router) {
+                    router.navigate(this.props.after);
                 }
             }
         }

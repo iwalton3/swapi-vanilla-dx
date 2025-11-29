@@ -20,8 +20,7 @@ PROXY_HOST = "https://iwalton.com"
 # Paths to proxy to remote server (everything else served locally)
 PROXY_PATHS = [
     '/spa-api',
-    '/spwg-api',
-    '/theme/',
+    '/theme/'
 ]
 
 # Base directory for serving files

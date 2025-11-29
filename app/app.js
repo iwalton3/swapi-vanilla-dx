@@ -2,7 +2,7 @@
  * Main Application Entry Point
  */
 
-import { Router, defineRouterOutlet, defineRouterLink } from './lib/router.js';
+import { Router, defineRouterOutlet, defineRouterLink, setRouter } from './lib/router.js';
 import login from './auth/auth.js';
 
 // Import core components (needed immediately)
@@ -58,6 +58,26 @@ const router = new Router({
         require: 'root',
         load: () => import('./hremote-app/remote.js')  // Let component import its own deps
     },
+    '/autopassword/': {
+        component: 'autopassword-page',
+        load: () => import('./apps/autopassword/autopassword.js')
+    },
+    '/webgrep/': {
+        component: 'webgrep-page',
+        load: () => import('./apps/webgrep/webgrep.js')
+    },
+    '/qnote/': {
+        component: 'qnote-page',
+        load: () => import('./apps/qnote/qnote.js')
+    },
+    '/qnote/:name/': {
+        component: 'qnote-page',
+        load: () => import('./apps/qnote/qnote.js')
+    },
+    '/fl/': {
+        component: 'fastlink-page',
+        load: () => import('./apps/fl/fastlink.js')
+    },
     '/404': {
         component: 'page-not-found',
         load: () => import('./page-not-found.js')
@@ -92,6 +112,9 @@ router.setOutlet(outlet);
 
 // Define router link component
 defineRouterLink(router);
+
+// Set as singleton for imports
+setRouter(router);
 
 // For debugging
 window.router = router;

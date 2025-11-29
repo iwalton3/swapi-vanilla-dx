@@ -3,6 +3,7 @@
  */
 import { defineComponent } from '../lib/framework.js';
 import { html } from '../lib/framework.js';
+import { getRouter } from '../lib/router.js';
 import './login-component.js';
 
 export default defineComponent('auth-error', {
@@ -14,8 +15,9 @@ export default defineComponent('auth-error', {
 
     mounted() {
         // Get message from URL query parameters
-        if (window.router && window.router.currentRoute) {
-            const query = window.router.currentRoute.state.query;
+        const router = getRouter();
+        if (router && router.currentRoute) {
+            const query = router.currentRoute.state.query;
             if (query && query.message) {
                 this.state.message = query.message;
             } else {
