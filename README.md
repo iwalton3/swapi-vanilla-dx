@@ -230,16 +230,17 @@ python3 test-server.py
 
 | Demo | URL | Description |
 |------|-----|-------------|
-| **E-commerce Shop** | [/apps/shop/](http://localhost:9000/apps/shop/) | Full shopping experience with product catalog, filtering, cart, and checkout flow. Demonstrates routing, state management, and responsive design. |
-| **iwalton.com** | [/](http://localhost:9000/) | Personal website re-implementation with user management, authentication, password generator, and home automation tools. |
+| **E-commerce Shop** | [/apps/shop/](https://iwalton.com/apps/shop/) | Full shopping experience with product catalog, filtering, cart, and checkout flow. Demonstrates routing, state management, and responsive design. |
+| **iwalton.com** | [iwalton.com](https://iwalton.com/) | Personal website re-implementation with user management, authentication, password generator, and home automation tools. |
 
 ### Framework Showcases
 
 | Demo | URL | Description |
 |------|-----|-------------|
-| **Component Library** | [/componentlib/](http://localhost:9000/componentlib/) | Interactive showcase of all vdx-ui components (buttons, forms, dialogs, data tables, etc.) with live examples. |
-| **Playground** | [/playground.html](http://localhost:9000/playground.html) | Core framework features: reactive state, x-model binding, each/when helpers, computed properties, virtual scrolling. |
-| **Bundle Demo** | [/bundle-demo/](http://localhost:9000/bundle-demo/) | Examples using pre-bundled framework versions for embedding scenarios. |
+| **Component Library** | [/componentlib/](https://iwalton.com/componentlib/) | Interactive showcase of all vdx-ui components (buttons, forms, dialogs, data tables, etc.) with live examples. |
+| **Playground** | [/playground.html](https://iwalton.com/playground.html) | Core framework features: reactive state, x-model binding, each/when helpers, computed properties, virtual scrolling. |
+| **Bundle Demo** | [/bundle-demo/](https://iwalton.com/bundle-demo/) | Examples using pre-bundled framework versions for embedding scenarios. |
+| **Framework Tests** | [/tests/](https://iwalton.com/tests/) | Comprehensive tests. |
 
 ## Running Tests
 
