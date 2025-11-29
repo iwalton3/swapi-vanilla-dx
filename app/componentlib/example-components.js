@@ -619,7 +619,7 @@ defineComponent('example-splitter', {
     template() {
         return html`
             <div style="height: 400px;">
-                <cl-splitter layout="horizontal" panelsizes="[60, 40]">
+                <cl-splitter layout="horizontal" panelsizes="${[60, 40]}">
                     <div slot="panel-1" style="padding: 20px;">
                         <h3>Left Panel</h3>
                         <p>Drag the divider to resize.</p>

@@ -927,7 +927,7 @@ export const componentExamples = {
                     template() {
                         return html\`
                             <div style="height: 400px;">
-                                <cl-splitter layout="horizontal" panelsizes="[60, 40]">
+                                <cl-splitter layout="horizontal" panelsizes="\${[60, 40]}">
                                     \${raw('<div slot="panel-1" style="padding: 20px;"><h3>Left Panel</h3><p>Drag the divider to resize.</p></div>')}
                                     \${raw('<div slot="panel-2" style="padding: 20px;"><h3>Right Panel</h3><p>This panel adjusts automatically.</p></div>')}
                                 </cl-splitter>
