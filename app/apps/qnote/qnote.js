@@ -63,8 +63,11 @@ export default defineComponent('qnote-page', {
             this.state.previousName = this.state.name;
             this.loadNote();
         } else if (this.state.defaultNote) {
-            // Load default note if no param specified
-            this.navigateToNote(this.state.defaultNote);
+            // Load default note directly and update URL with replace
+            this.state.name = this.normalizeName(this.state.defaultNote);
+            this.state.previousName = this.state.name;
+            this.loadNote();
+            this.replaceToNote(this.state.name);
         }
     },
 
@@ -168,6 +171,17 @@ export default defineComponent('qnote-page', {
             }
         },
 
+        replaceToNote(name) {
+            // Update URL without adding history entry
+            const router = getRouter();
+            if (name) {
+                const slug = this.nameToSlug(name);
+                router.replace(`/qnote/${encodeURIComponent(slug)}/`);
+            } else {
+                router.replace('/qnote/');
+            }
+        },
+
         saveDraft() {
             if (this.state.name && this.state.content) {
                 localStorage.setItem(getDraftKey(this.state.name), this.state.content);
@@ -199,10 +213,17 @@ export default defineComponent('qnote-page', {
         },
 
         autoExpand(textarea) {
+            // Save scroll position before resize
+            const scrollY = window.scrollY;
+            const scrollX = window.scrollX;
+
             textarea.style.height = 'auto';
             const minHeight = 200;
             const newHeight = Math.max(textarea.scrollHeight, minHeight);
             textarea.style.height = newHeight + 'px';
+
+            // Restore scroll position
+            window.scrollTo(scrollX, scrollY);
         },
 
         // Start polling for updates
@@ -225,17 +246,18 @@ export default defineComponent('qnote-page', {
 
             try {
                 const response = await fetch(`${RW_API}?name=${encodeURIComponent(this.state.name)}`);
-                const serverContent = await response.text();
+                // Normalize for comparison
+                const serverContent = this.normalizeNoteText(await response.text());
 
-                // Server content changed (normalize for comparison)
-                if (serverContent.trim() !== this.state.serverContent.trim()) {
+                // Server content changed
+                if (serverContent !== this.state.serverContent) {
                     this.state.serverContent = serverContent;
 
                     if (!this.state.isUnsaved) {
-                        // No local changes, just update
-                        this.state.content = serverContent;
+                        // No local changes, update preserving cursor/scroll
+                        this.updateContentPreservingCursor(serverContent);
                         this.state.savedContent = serverContent;
-                    } else if (serverContent.trim() !== this.state.savedContent.trim()) {
+                    } else if (serverContent !== this.state.savedContent) {
                         // Both server and local changed - conflict!
                         this.state.hasConflict = true;
                     }
@@ -283,13 +305,13 @@ export default defineComponent('qnote-page', {
                 // Check if a newer request has started - abort if stale
                 if (requestId !== this.state.loadRequestId) return;
 
-                const serverContent = await contentResp.text();
+                // Normalize server content (API adds trailing newlines)
+                const serverContent = this.normalizeNoteText(await contentResp.text());
 
                 // Check for local draft
                 const draft = localStorage.getItem(getDraftKey(cleanName));
 
-                // Normalize comparison since server trims and adds newline
-                if (draft && draft.trim() !== serverContent.trim()) {
+                if (draft && this.normalizeNoteText(draft) !== serverContent) {
                     // We have a draft that differs from server
                     this.state.content = serverContent;
                     this.state.savedContent = serverContent;
@@ -342,11 +364,83 @@ export default defineComponent('qnote-page', {
             }
         },
 
+        normalizeNoteText(text) {
+            return text.trim().replace(/\r\n/g, '\n');
+        },
+
+        // Adjust cursor position based on content diff
+        adjustCursorForDiff(oldContent, newContent, cursorPos) {
+            // Find common prefix length
+            let prefixLen = 0;
+            const minLen = Math.min(oldContent.length, newContent.length);
+            while (prefixLen < minLen && oldContent[prefixLen] === newContent[prefixLen]) {
+                prefixLen++;
+            }
+
+            // Find common suffix length (don't overlap with prefix)
+            let suffixLen = 0;
+            const maxSuffix = Math.min(oldContent.length - prefixLen, newContent.length - prefixLen);
+            while (suffixLen < maxSuffix &&
+                   oldContent[oldContent.length - 1 - suffixLen] === newContent[newContent.length - 1 - suffixLen]) {
+                suffixLen++;
+            }
+
+            // Cursor in unchanged prefix - keep position
+            if (cursorPos <= prefixLen) {
+                return cursorPos;
+            }
+
+            // Cursor in unchanged suffix - adjust for length change
+            const oldSuffixStart = oldContent.length - suffixLen;
+            if (cursorPos >= oldSuffixStart) {
+                const offsetFromEnd = oldContent.length - cursorPos;
+                return newContent.length - offsetFromEnd;
+            }
+
+            // Cursor in changed middle - place at end of new middle
+            return newContent.length - suffixLen;
+        },
+
+        // Update content while preserving cursor position and scroll
+        updateContentPreservingCursor(newContent) {
+            const textarea = this.querySelector('#content');
+            if (!textarea) {
+                this.state.content = newContent;
+                return;
+            }
+
+            const oldContent = this.state.content;
+            const cursorStart = textarea.selectionStart;
+            const cursorEnd = textarea.selectionEnd;
+            const scrollTop = textarea.scrollTop;
+            const windowScrollY = window.scrollY;
+
+            // Calculate adjusted cursor positions
+            const newCursorStart = this.adjustCursorForDiff(oldContent, newContent, cursorStart);
+            const newCursorEnd = this.adjustCursorForDiff(oldContent, newContent, cursorEnd);
+
+            // Update content
+            this.state.content = newContent;
+
+            // Restore after render
+            requestAnimationFrame(() => {
+                const ta = this.querySelector('#content');
+                if (ta) {
+                    const maxPos = ta.value.length;
+                    ta.selectionStart = Math.min(Math.max(0, newCursorStart), maxPos);
+                    ta.selectionEnd = Math.min(Math.max(0, newCursorEnd), maxPos);
+                    ta.scrollTop = scrollTop;
+                }
+                window.scrollTo(window.scrollX, windowScrollY);
+            });
+        },
+
         async saveNote(lockAction = null) {
             if (!this.state.name || this.state.saving) return;
 
             const cleanName = this.normalizeName(this.state.name);
-            const contentToSave = this.state.content;
+            // Trim content before saving to normalize
+            const contentToSave = this.normalizeNoteText(this.state.content);
 
             this.state.saving = true;
 
@@ -364,7 +458,7 @@ export default defineComponent('qnote-page', {
                     credentials: 'include'
                 });
 
-                const result = (await response.text()).trim();
+                const result = this.normalizeNoteText(await response.text());
 
                 if (result === 'Note is locked.') {
                     notify('Note is locked by another user', 'error');
@@ -374,11 +468,10 @@ export default defineComponent('qnote-page', {
 
                 // Verify the save by fetching back
                 const verifyResp = await fetch(`${RW_API}?name=${encodeURIComponent(cleanName)}`);
-                const verifiedContent = await verifyResp.text();
+                const verifiedContent = this.normalizeNoteText(await verifyResp.text());
 
-                // API normalizes content: trims whitespace and adds trailing newline
-                const normalizeForCompare = (s) => s.trim();
-                if (normalizeForCompare(verifiedContent) !== normalizeForCompare(contentToSave)) {
+                // Both are already trimmed, compare directly
+                if (verifiedContent !== contentToSave) {
                     // Save didn't work properly!
                     notify('Save verification failed - keeping local copy', 'error');
                     this.saveDraft();
@@ -389,12 +482,8 @@ export default defineComponent('qnote-page', {
                 // Save verified!
                 if (result === 'Saved! (locked)') {
                     this.state.lockStatus = 'authorized';
-                    notify('Note saved and locked!');
                 } else if (result === 'Saved! (public)') {
                     this.state.lockStatus = 'public';
-                    notify('Note saved!');
-                } else {
-                    notify('Note saved!');
                 }
 
                 // Store actual server content for accurate comparison
@@ -467,6 +556,8 @@ export default defineComponent('qnote-page', {
                     this.stopPolling();
                     this.state.previousName = normalized;
                     this.loadNote();
+                    // Update URL without adding history entry
+                    this.replaceToNote(normalized);
                 } else if (!normalized) {
                     // Name cleared - reset state
                     this.stopPolling();
@@ -478,6 +569,8 @@ export default defineComponent('qnote-page', {
                     this.state.lockStatus = 'public';
                     this.state.hasDraft = false;
                     this.state.hasConflict = false;
+                    // Update URL without adding history entry
+                    this.replaceToNote('');
                 }
             }, 300);
         },
@@ -502,12 +595,14 @@ export default defineComponent('qnote-page', {
                 this.stopPolling();
                 this.state.previousName = normalized;
                 this.loadNote();
+                // Update URL without adding history entry
+                this.replaceToNote(normalized);
             }
         },
 
         handleContentInput() {
-            // Normalize comparison since server trims whitespace and adds trailing newline
-            this.state.isUnsaved = this.state.content.trim() !== this.state.savedContent.trim();
+            // Compare normalized content (savedContent is already normalized)
+            this.state.isUnsaved = this.normalizeNoteText(this.state.content) !== this.state.savedContent;
 
             // Clear conflict if user starts typing
             if (this.state.hasConflict && this.state.isUnsaved) {
