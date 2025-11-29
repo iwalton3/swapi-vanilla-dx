@@ -1,6 +1,6 @@
 
 
-import { createStore, pruneTemplateCache } from './framework.js';
+import { createStore, pruneTemplateCache, html, defineComponent } from './framework.js';
 
 let _router = null;
 
@@ -475,50 +475,27 @@ export function defineRouterLink(router) {
         return;
     }
 
-    class RouterLink extends HTMLElement {
-        connectedCallback() {
-            
-            if (!this._originalContent) {
-                this._originalContent = this.innerHTML;
-                this._to = this.getAttribute('to') || '/';
-                this._attrs = Array.from(this.attributes)
-                    .filter(attr => {
-                        if (attr.name === 'to') return false;
-                        if (attr.name.startsWith('on')) return false;
-                        return true;
-                    })
-                    .map(attr => {
-                        const escapedValue = attr.value
-                            .replace(/&/g, '&amp;')
-                            .replace(/"/g, '&quot;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;');
-                        return `${attr.name}="${escapedValue}"`;
-                    })
-                    .join(' ');
-            }
+    defineComponent('router-link', {
+        props: {
+            to: '/'
+        },
 
-            const to = this._to;
-            const content = this._originalContent;
-            const attrs = this._attrs;
-
-            // Generate URL based on router mode
-            const href = router ? router.url(to) : `#${to}`;
-
-            this.innerHTML = `<a href="${href}" ${attrs}>${content}</a>`;
-
-            // Intercept clicks for HTML5 routing
-            if (router && router.useHTML5) {
-                const link = this.querySelector('a');
-                if (link) {
-                    link.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        router.navigate(to);
-                    });
+        methods: {
+            handleClick(e) {
+                
+                if (router && router.useHTML5) {
+                    e.preventDefault();
+                    router.navigate(this.props.to);
                 }
             }
-        }
-    }
+        },
 
-    customElements.define('router-link', RouterLink);
+        template() {
+            const href = router ? router.url(this.props.to) : `#${this.props.to}`;
+
+            return html`
+                <a href="${href}" on-click="handleClick">${this.props.children}</a>
+            `;
+        }
+    });
 }
