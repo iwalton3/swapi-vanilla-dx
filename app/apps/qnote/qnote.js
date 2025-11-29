@@ -681,14 +681,6 @@ export default defineComponent('qnote-page', {
             <div class="qnote">
                 <h1>Quick Note</h1>
 
-                <div class="section">
-                    <p>Notes are encrypted and stored on the server. ${when(isLoggedIn, html`
-                        You can lock notes to prevent others from editing.
-                    `, html`
-                        <router-link to="/auth/">Log in</router-link> to lock notes.
-                    `)}</p>
-                </div>
-
                 ${when(this.state.hasDraft, html`
                     <div class="draft-notice">
                         <span>You have unsaved changes from a previous session.</span>
@@ -758,6 +750,14 @@ export default defineComponent('qnote-page', {
                             <button on-click="setAsDefault">Set as Default</button>
                         `)}
                     </div>
+                </div>
+
+                <div class="section">
+                    <p>Notes are encrypted and stored on the server. ${when(isLoggedIn, html`
+                        You can lock notes to prevent others from editing.
+                    `, html`
+                        <router-link to="/auth/">Log in</router-link> to lock notes.
+                    `)}</p>
                 </div>
             </div>
         `;
