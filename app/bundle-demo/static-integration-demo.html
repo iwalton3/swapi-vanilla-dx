@@ -331,6 +331,67 @@
         </div>
     </div>
 
+    <h3>5. Children Props (React-style Composition)</h3>
+
+    <p>
+        Components can accept child elements just like React. This enables powerful
+        composition patterns where you wrap static content with reactive behavior:
+    </p>
+
+    <div class="demo-section">
+        <h4>Collapsible Section with Static Children</h4>
+        <collapsible-section title="Click to expand this section">
+            <p style="margin: 0;">
+                This paragraph is <strong>static HTML</strong> written directly in the page.
+                The collapsible-section component wraps it and adds interactive expand/collapse
+                behavior. The children are passed via <code>this.props.children</code>.
+            </p>
+            <ul style="margin: 0.5rem 0 0 0;">
+                <li>List items work too</li>
+                <li>Any HTML can be a child</li>
+                <li>Including other components!</li>
+            </ul>
+        </collapsible-section>
+
+        <collapsible-section title="Another section with different content" expanded="true">
+            <p style="margin: 0;">
+                This section starts expanded because we set <code>expanded="true"</code>.
+                Each component instance maintains its own state independently.
+            </p>
+        </collapsible-section>
+    </div>
+
+    <h3>6. Nested Component Hydration</h3>
+
+    <p>
+        The most powerful feature: you can nest VDX components inside other components
+        in your static HTML, and they all hydrate properly. This enables static site
+        generators to render component trees that come alive in the browser:
+    </p>
+
+    <div class="demo-section">
+        <h4>Component Tree from Static HTML</h4>
+        <collapsible-section title="Interactive tools inside a collapsible" expanded="true">
+            <p style="margin: 0 0 1rem 0;">
+                These converters below are <strong>fully functional VDX components</strong>
+                nested inside another VDX component, all defined in static HTML:
+            </p>
+            <div style="margin-bottom: 1rem;">
+                <strong>Temperature:</strong>
+                <div><temp-converter initial-fahrenheit="72"></temp-converter></div>
+            </div>
+            <div>
+                <strong>Volume:</strong>
+                <div><unit-converter from-unit="liters" to-unit="gallons" initial-value="10"></unit-converter></div>
+            </div>
+        </collapsible-section>
+
+        <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+            This pattern is perfect for static site generators (Hugo, Jekyll, 11ty) -
+            render component markup server-side, and VDX hydrates them client-side.
+        </p>
+    </div>
+
     <h2>Summary</h2>
 
     <p>
@@ -359,7 +420,51 @@
             <td>Read component state</td>
             <td><code>element.getState()</code> or <code>element.state</code></td>
         </tr>
+        <tr>
+            <td>Pass children</td>
+            <td>Place HTML inside component tags, access via <code>this.props.children</code></td>
+        </tr>
+        <tr>
+            <td>Nested components</td>
+            <td>VDX components in static HTML children hydrate automatically</td>
+        </tr>
     </table>
+
+    <h2>Important: Component Boundaries</h2>
+
+    <blockquote style="border-color: #e76f51; background: #fef2f0;">
+        <strong>Warning:</strong> Components are a boundary between vanilla JS and VDX.
+        The framework manages everything <em>inside</em> a component's template.
+        Do not use DOM manipulation (like <code>appendChild</code>, <code>innerHTML</code>,
+        or <code>removeChild</code>) on elements inside a component - the virtual DOM
+        will overwrite your changes on the next render.
+    </blockquote>
+
+    <p>
+        <strong>Safe pattern:</strong> Components as islands in a static page.
+        Your vanilla JS page contains VDX components, but doesn't reach inside them.
+    </p>
+
+    <pre><code>&lt;!-- GOOD: Static page with component islands --&gt;
+&lt;header&gt;Static header&lt;/header&gt;
+&lt;main&gt;
+    &lt;p&gt;Static content...&lt;/p&gt;
+    &lt;unit-converter&gt;&lt;/unit-converter&gt;  &lt;!-- Component island --&gt;
+    &lt;p&gt;More static content...&lt;/p&gt;
+&lt;/main&gt;
+&lt;footer&gt;Static footer&lt;/footer&gt;</code></pre>
+
+    <p>
+        <strong>Avoid:</strong> Wrapping your entire static page in a VDX component,
+        as the framework will expect to manage all DOM inside it.
+    </p>
+
+    <pre><code>&lt;!-- BAD: Don't wrap static content in a component --&gt;
+&lt;site-wrapper&gt;
+    &lt;header&gt;...&lt;/header&gt;
+    &lt;main&gt;...your entire site...&lt;/main&gt;
+    &lt;footer&gt;...&lt;/footer&gt;
+&lt;/site-wrapper&gt;</code></pre>
 
     <footer class="article-footer">
         <p>
@@ -1027,6 +1132,88 @@
             .cart-total-amount {
                 color: #2a9d8f;
                 font-size: 1.2rem;
+            }
+        `
+    });
+
+    // =========================================================================
+    // COMPONENT 7: Collapsible Section (Children demo)
+    // =========================================================================
+    defineComponent('collapsible-section', {
+        props: {
+            title: 'Section',
+            expanded: false
+        },
+
+        data() {
+            return {
+                isExpanded: false
+            };
+        },
+
+        mounted() {
+            // Handle both string "true" and boolean true
+            this.state.isExpanded = this.props.expanded === true || this.props.expanded === 'true';
+        },
+
+        methods: {
+            toggle() {
+                this.state.isExpanded = !this.state.isExpanded;
+            }
+        },
+
+        template() {
+            return html`
+                <div class="collapsible ${this.state.isExpanded ? 'expanded' : ''}">
+                    <button class="collapsible-header" on-click="toggle">
+                        <span class="collapsible-icon">${this.state.isExpanded ? '▼' : '▶'}</span>
+                        <span class="collapsible-title">${this.props.title}</span>
+                    </button>
+                    ${when(this.state.isExpanded, html`
+                        <div class="collapsible-content">
+                            ${this.props.children}
+                        </div>
+                    `)}
+                </div>
+            `;
+        },
+
+        styles: /*css*/`
+            .collapsible {
+                font-family: system-ui, sans-serif;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                margin-bottom: 0.5rem;
+                overflow: hidden;
+            }
+            .collapsible-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                width: 100%;
+                padding: 12px 16px;
+                background: #f8f9fa;
+                border: none;
+                cursor: pointer;
+                font-size: 1rem;
+                text-align: left;
+                transition: background 0.2s;
+            }
+            .collapsible-header:hover {
+                background: #e9ecef;
+            }
+            .collapsible-icon {
+                color: #2a9d8f;
+                font-size: 0.8rem;
+            }
+            .collapsible-title {
+                font-weight: 600;
+                color: #264653;
+            }
+            .collapsible-content {
+                padding: 16px;
+                border-top: 1px solid #ddd;
+                background: white;
             }
         `
     });

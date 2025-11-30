@@ -5,7 +5,7 @@
 
 import { reactive, createEffect, trackAllDependencies } from './reactivity.js';
 import { render as preactRender } from '../vendor/preact/index.js';
-import { applyValues } from './template-compiler.js';
+import { applyValues, compileTemplate, groupChildrenBySlot } from './template-compiler.js';
 
 // Debug hooks - can be set by debug-enable.js
 let debugRenderCycleHook = null;
@@ -440,6 +440,32 @@ export function defineComponent(name, options) {
             }
             // If no VDX parent found, this is a root component
             this._isVdxRoot = !this._vdxParent;
+
+            // For root components, capture light DOM children before first render
+            // This enables static HTML inside component tags to be passed as children
+            // Nested VDX components in the light DOM will be properly hydrated
+            if (this._isVdxRoot && this.innerHTML.trim()) {
+                // Capture the light DOM content
+                const lightDomContent = this.innerHTML;
+                // Clear it so it doesn't duplicate when we render
+                this.innerHTML = '';
+
+                // Parse the HTML using the template compiler
+                // Using array notation to call compileTemplate with raw HTML (no interpolations)
+                const compiled = compileTemplate([lightDomContent]);
+                // Convert to VNodes (no dynamic values, no component context needed)
+                const vnodes = applyValues(compiled, [], null);
+
+                // Normalize to array for slot processing
+                const childArray = Array.isArray(vnodes) ? vnodes : (vnodes ? [vnodes] : []);
+
+                // Separate default children from named slots
+                const { defaultChildren, namedSlots } = groupChildrenBySlot(childArray);
+
+                // Set children and slots on props
+                this.props.children = defaultChildren;
+                this.props.slots = namedSlots;
+            }
 
             // Setup store subscriptions (auto-sync external stores)
             if (options.stores) {

@@ -684,8 +684,9 @@ function resolveEventHandler(eventName, def, values, component, isCustomElement)
 
 /**
  * Group children by slot name for custom elements
+ * Exported for use in light DOM children capture
  */
-function groupChildrenBySlot(children) {
+export function groupChildrenBySlot(children) {
     const defaultChildren = [];
     const namedSlots = {};
 

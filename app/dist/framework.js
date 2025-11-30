@@ -1,7 +1,7 @@
 /**
  * VDX-Web Framework Bundle
  * https://github.com/iwalton3/vdx-web
- * Generated: 2025-11-30T06:30:25.076Z
+ * Generated: 2025-11-30T17:47:53.454Z
  *
  * Includes Preact (https://preactjs.com/)
  * Copyright (c) 2015-present Jason Miller
@@ -1755,6 +1755,7 @@ function trackAllDependencies(obj, visited = new Set()) {
 const templateCompiler = {
     compileTemplate: compileTemplate,
     applyValues: applyValues,
+    groupChildrenBySlot: groupChildrenBySlot,
     clearTemplateCache: clearTemplateCache,
     pruneTemplateCache: pruneTemplateCache,
     getTemplateCacheSize: getTemplateCacheSize
@@ -2310,6 +2311,24 @@ function defineComponent(name, options) {
             }
 
             this._isVdxRoot = !this._vdxParent;
+
+            if (this._isVdxRoot && this.innerHTML.trim()) {
+
+                const lightDomContent = this.innerHTML;
+
+                this.innerHTML = '';
+
+                const compiled = compileTemplate([lightDomContent]);
+
+                const vnodes = applyValues(compiled, [], null);
+
+                const childArray = Array.isArray(vnodes) ? vnodes : (vnodes ? [vnodes] : []);
+
+                const { defaultChildren, namedSlots } = groupChildrenBySlot(childArray);
+
+                this.props.children = defaultChildren;
+                this.props.slots = namedSlots;
+            }
 
             if (options.stores) {
                 for (const [storeName, store] of Object.entries(options.stores)) {

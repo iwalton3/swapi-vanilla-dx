@@ -32,10 +32,34 @@ Components work like native HTML elements, making them perfect for enhancing sta
 - **Vanilla JS event listeners** - Use `addEventListener()` on components like any HTML element
 - **DOM attribute propagation** - `setAttribute()` changes automatically flow into components
 - **Rich data via refs** - Pass arrays/objects directly: `element.setData({ items: [...] })`
+- **Children props** - Pass HTML content inside component tags, access via `this.props.children`
+- **Nested component hydration** - VDX components in light DOM children hydrate automatically, enabling SSG patterns
 - **Transparent coordination** - Usage of components on multiple different parts of a static page is allowed and automatically managed.
 - **No framework lock-in** - Components integrate with jQuery, vanilla JS, or any other code
 
+**Important:** Components are a boundary between vanilla JS and VDX. The framework manages everything *inside* a component's template - don't use DOM manipulation (`appendChild`, `innerHTML`, etc.) on elements inside components, as the virtual DOM will overwrite changes on the next render. Use components as "islands" in your static page, not as wrappers around your entire site.
+
 See the [Static Integration Demo](/bundle-demo/static-integration-demo.html) for live examples.
+
+### Hydration Support
+
+VDX supports **automatic hydration** of component trees from static HTML. This makes it perfect for static site generators (Hugo, Jekyll, Eleventy, etc.):
+
+```html
+<!-- Server-rendered or static HTML -->
+<collapsible-panel title="Settings">
+    <theme-switcher mode="dark"></theme-switcher>
+    <volume-control level="80"></volume-control>
+</collapsible-panel>
+```
+
+When the page loads, VDX automatically:
+1. Captures the light DOM children before rendering
+2. Parses them as VNodes (not raw HTML strings)
+3. Hydrates nested VDX components recursively
+4. Passes everything via `this.props.children` and `this.props.slots`
+
+No special hydration API needed - just write your component markup in HTML and VDX brings it to life.
 
 ## Quick Start
 
