@@ -1162,14 +1162,6 @@ list.countries = [
 ];
 ```
 
-**Or use setAttribute for string values:**
-
-```javascript
-// setAttribute works too (values are parsed as JSON if possible)
-converter.setAttribute('from-unit', 'liters');
-converter.setAttribute('initial-value', '10');
-```
-
 ### Event Listeners
 
 Components emit standard DOM events:
@@ -1260,6 +1252,36 @@ VDX components can be nested inside other components in static HTML:
 ```
 
 All nested components hydrate automatically - perfect for static site generators like Hugo, Jekyll, or Eleventy.
+
+### JSON Hydration for SSG
+
+For static site generators, you can pass complex data using `json-*` attributes that reference `<script type="application/json">` elements. This avoids HTML attribute escaping issues:
+
+```html
+<!-- Component references JSON data by script ID -->
+<country-list json-countries="countries-data" title="My Countries"></country-list>
+
+<!-- JSON data in a script tag (easy for SSG templates to generate) -->
+<script type="application/json" id="countries-data">
+[
+    {"flag": "🇫🇷", "name": "France", "capital": "Paris"},
+    {"flag": "🇩🇪", "name": "Germany", "capital": "Berlin"},
+    {"flag": "🇮🇹", "name": "Italy", "capital": "Rome"}
+]
+</script>
+```
+
+**How it works:**
+1. On mount, the framework looks for `json-*` attributes
+2. For `json-countries="countries-data"`, it finds `<script id="countries-data">`
+3. Parses the JSON and sets `this.props.countries`
+4. Removes the `json-*` attribute (script element stays for potential reuse)
+
+**Benefits:**
+- No HTML escaping needed for quotes or special characters
+- JSON stays formatted and readable in view-source
+- Multiple components can share the same data source
+- SSG templates can easily output JSON blocks
 
 ### Component Boundaries
 

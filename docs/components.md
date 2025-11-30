@@ -119,22 +119,21 @@ export default defineComponent('user-card', {
 });
 ```
 
-### Setting Props - Three Ways
+### Setting Props - Four Ways
 
-**1. HTML Attributes (Textual Props)**
+**1. HTML Attributes (String Props)**
 
-Props can be set via regular HTML attributes. The framework automatically parses JSON values:
+Props can be set via regular HTML attributes (values are always strings):
 
 ```html
 <!-- In HTML or at root level -->
-<user-card username="alice" userId="123"></user-card>
-
-<!-- Parsed as: username="alice" (string), userId=123 (number via JSON.parse) -->
+<user-card username="alice" user-id="123"></user-card>
+<!-- Note: user-id="123" becomes this.props.userId = "123" (string) -->
 ```
 
 **How it works:**
 - All props are automatically registered as `observedAttributes`
-- Attribute values are parsed as JSON first, falling back to strings
+- Attribute values are always strings (use JavaScript properties for other types)
 - Changes to attributes after mount trigger re-renders via `attributeChangedCallback`
 
 **2. JavaScript Properties**
@@ -175,6 +174,26 @@ template() {
 - Framework detects custom elements (tags with hyphens)
 - Objects/arrays/functions are passed via property assignment, not stringified
 - Strings/numbers are passed as strings (parsed by child component)
+
+**4. JSON Hydration (for SSG)**
+
+For static site generators, use `json-*` attributes to reference JSON data in script tags:
+
+```html
+<!-- Component with json-* attribute -->
+<country-list json-countries="my-data" title="Countries"></country-list>
+
+<!-- JSON data (easy for SSG templates to generate) -->
+<script type="application/json" id="my-data">
+[{"name": "France"}, {"name": "Germany"}]
+</script>
+```
+
+**How it works:**
+- On mount, `json-countries` looks for `<script id="my-data" type="application/json">`
+- Parses JSON and sets `this.props.countries`
+- Removes the `json-*` attribute after processing
+- Script element remains (can be shared by multiple components)
 
 ### Reactivity Guarantees
 

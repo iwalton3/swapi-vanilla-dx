@@ -1,7 +1,7 @@
 /**
  * VDX-Web Framework Bundle
  * https://github.com/iwalton3/vdx-web
- * Generated: 2025-11-30T17:47:53.454Z
+ * Generated: 2025-11-30T19:52:54.194Z
  *
  * Includes Preact (https://preactjs.com/)
  * Copyright (c) 2015-present Jason Miller
@@ -2444,6 +2444,34 @@ function defineComponent(name, options) {
                         this.props[propName] = options.props[propName];
                     }
                 }
+            }
+
+            const jsonAttrsToRemove = [];
+            for (const attr of this.attributes) {
+                if (attr.name.startsWith('json-')) {
+                    const propName = attr.name.slice(5); 
+                    const scriptId = attr.value;
+                    const scriptEl = document.getElementById(scriptId);
+
+                    if (scriptEl && scriptEl.type === 'application/json') {
+                        try {
+                            const jsonData = JSON.parse(scriptEl.textContent);
+                            this.props[propName] = jsonData;
+                        } catch (e) {
+                            console.warn(`[${this.tagName}] Failed to parse JSON from #${scriptId} for prop "${propName}":`, e.message);
+                        }
+                    } else if (!scriptEl) {
+                        console.warn(`[${this.tagName}] json-${propName} references missing element #${scriptId}`);
+                    } else {
+                        console.warn(`[${this.tagName}] json-${propName} references #${scriptId} which is not type="application/json"`);
+                    }
+
+                    jsonAttrsToRemove.push(attr.name);
+                }
+            }
+
+            for (const attrName of jsonAttrsToRemove) {
+                this.removeAttribute(attrName);
             }
         }
 

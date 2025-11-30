@@ -606,6 +606,38 @@ export function defineComponent(name, options) {
                     }
                 }
             }
+
+            // Process json-* attributes for hydration from <script type="application/json"> elements
+            // Example: <my-component json-items="items-data"></my-component>
+            //          <script type="application/json" id="items-data">[...]</script>
+            const jsonAttrsToRemove = [];
+            for (const attr of this.attributes) {
+                if (attr.name.startsWith('json-')) {
+                    const propName = attr.name.slice(5); // Remove 'json-' prefix
+                    const scriptId = attr.value;
+                    const scriptEl = document.getElementById(scriptId);
+
+                    if (scriptEl && scriptEl.type === 'application/json') {
+                        try {
+                            const jsonData = JSON.parse(scriptEl.textContent);
+                            this.props[propName] = jsonData;
+                        } catch (e) {
+                            console.warn(`[${this.tagName}] Failed to parse JSON from #${scriptId} for prop "${propName}":`, e.message);
+                        }
+                    } else if (!scriptEl) {
+                        console.warn(`[${this.tagName}] json-${propName} references missing element #${scriptId}`);
+                    } else {
+                        console.warn(`[${this.tagName}] json-${propName} references #${scriptId} which is not type="application/json"`);
+                    }
+
+                    jsonAttrsToRemove.push(attr.name);
+                }
+            }
+
+            // Remove json-* attributes after processing (don't modify while iterating)
+            for (const attrName of jsonAttrsToRemove) {
+                this.removeAttribute(attrName);
+            }
         }
 
         /**
