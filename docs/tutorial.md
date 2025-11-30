@@ -1,0 +1,1437 @@
+# VDX Framework Tutorial
+
+A hands-on guide to building reactive web applications with zero dependencies.
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Getting Started](#getting-started)
+3. [Your First Component](#your-first-component)
+4. [Working with State](#working-with-state)
+5. [Two-Way Data Binding](#two-way-data-binding)
+6. [Template Helpers](#template-helpers)
+7. [Event Handling](#event-handling)
+8. [Component Communication](#component-communication)
+9. [Lifecycle Hooks](#lifecycle-hooks)
+10. [Routing](#routing)
+11. [State Management with Stores](#state-management-with-stores)
+12. [Static Site Integration](#static-site-integration)
+13. [Advanced Patterns](#advanced-patterns)
+14. [Best Practices](#best-practices)
+
+---
+
+## Introduction
+
+VDX (Vanilla Developer Experience) is a web framework that provides modern reactive features without any npm dependencies. It runs directly in the browser using ES6 modules - no build step required.
+
+### What You'll Learn
+
+By the end of this tutorial, you'll be able to:
+- Create reactive components with automatic re-rendering
+- Use two-way data binding for forms
+- Build single-page applications with routing
+- Manage global state with stores
+- Integrate VDX components into static HTML pages
+- Apply best practices for performance and security
+
+### Prerequisites
+
+- Basic knowledge of HTML, CSS, and JavaScript
+- A text editor (VS Code recommended)
+- Python 3 (for the development server) or any HTTP server
+
+---
+
+## Getting Started
+
+### Step 1: Set Up the Development Server
+
+```bash
+cd app
+python3 test-server.py
+```
+
+Open your browser to **http://localhost:9000/**
+
+### Step 2: Understand the Project Structure
+
+```
+app/
+├── lib/                     # Core framework
+│   ├── framework.js         # Main exports (defineComponent, html, etc.)
+│   ├── router.js            # Router system
+│   └── utils.js             # Utilities (notify, darkTheme, etc.)
+├── dist/                    # Pre-bundled versions (for embedding)
+├── components/              # Reusable components
+├── apps/                    # Application pages
+└── index.html               # Entry point
+```
+
+### Two Ways to Import
+
+**Development (separate files):**
+```javascript
+import { defineComponent, html } from './lib/framework.js';
+```
+
+**Bundled (single file, ~74KB):**
+```javascript
+import { defineComponent, html } from './dist/framework.js';
+```
+
+---
+
+## Your First Component
+
+Let's create a simple counter component to understand the basics.
+
+### Step 1: Create the Component File
+
+Create `app/my-counter.js`:
+
+```javascript
+import { defineComponent, html } from './lib/framework.js';
+
+export default defineComponent('my-counter', {
+    // Reactive state - changes trigger re-renders
+    data() {
+        return {
+            count: 0
+        };
+    },
+
+    // Methods accessible in the template
+    methods: {
+        increment() {
+            this.state.count++;
+        },
+        decrement() {
+            this.state.count--;
+        }
+    },
+
+    // Template returns the component's HTML
+    template() {
+        return html`
+            <div class="counter">
+                <h2>Count: ${this.state.count}</h2>
+                <button on-click="decrement">-</button>
+                <button on-click="increment">+</button>
+            </div>
+        `;
+    },
+
+    // Scoped styles (optional)
+    styles: /*css*/`
+        .counter {
+            text-align: center;
+            padding: 20px;
+        }
+        button {
+            font-size: 1.5rem;
+            padding: 10px 20px;
+            margin: 0 5px;
+        }
+    `
+});
+```
+
+### Step 2: Use the Component
+
+Create `app/counter-demo.html`:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Counter Demo</title>
+</head>
+<body>
+    <my-counter></my-counter>
+
+    <script type="module">
+        import './my-counter.js';
+    </script>
+</body>
+</html>
+```
+
+### Key Concepts
+
+1. **`defineComponent(name, options)`** - Registers a custom element
+2. **`data()`** - Returns the component's reactive state
+3. **`methods`** - Functions callable from the template
+4. **`template()`** - Returns the HTML using the `html` template literal
+5. **`on-click="methodName"`** - Binds events to methods
+6. **`${this.state.property}`** - Interpolates reactive values
+
+---
+
+## Working with State
+
+State is the heart of reactive components. When state changes, the component automatically re-renders.
+
+### Accessing State
+
+```javascript
+data() {
+    return {
+        user: {
+            name: 'Alice',
+            age: 30
+        },
+        items: ['apple', 'banana']
+    };
+},
+
+methods: {
+    updateName() {
+        // Direct property assignment
+        this.state.user.name = 'Bob';
+    },
+
+    addItem() {
+        // Array methods work reactively
+        this.state.items.push('orange');
+    }
+}
+```
+
+### Reactivity Rules
+
+**DO:**
+```javascript
+// Direct assignment
+this.state.count = 10;
+
+// Nested property updates
+this.state.user.settings.theme = 'dark';
+
+// Array mutations in event handlers
+this.state.items.push(newItem);
+this.state.items.splice(index, 1);
+```
+
+**DON'T:**
+```javascript
+// NEVER mutate arrays with .sort() during render - infinite loop!
+getSortedItems() {
+    return this.state.items.sort(); // BAD!
+}
+
+// Instead, copy first:
+getSortedItems() {
+    return [...this.state.items].sort(); // GOOD!
+}
+```
+
+### Sets and Maps Are Not Reactive
+
+You must reassign to trigger updates:
+
+```javascript
+// Adding to a Set
+addToSet(item) {
+    const newSet = new Set(this.state.mySet);
+    newSet.add(item);
+    this.state.mySet = newSet;  // Reassignment triggers update
+}
+```
+
+---
+
+## Two-Way Data Binding
+
+The `x-model` directive provides automatic two-way binding, including with nested properties using the dot operator.
+
+### Basic Usage
+
+```javascript
+defineComponent('user-form', {
+    data() {
+        return {
+            username: '',
+            age: 18,
+            agreed: false
+        };
+    },
+
+    template() {
+        return html`
+            <form>
+                <!-- Text input -->
+                <input type="text" x-model="username" placeholder="Username">
+
+                <!-- Number input - automatically converts to number! -->
+                <input type="number" x-model="age" min="0" max="120">
+
+                <!-- Checkbox - automatically converts to boolean! -->
+                <label>
+                    <input type="checkbox" x-model="agreed">
+                    I agree to the terms
+                </label>
+
+                <p>Username: ${this.state.username}</p>
+                <p>Age: ${this.state.age} (type: ${typeof this.state.age})</p>
+                <p>Agreed: ${this.state.agreed}</p>
+            </form>
+        `;
+    }
+});
+```
+
+### Supported Input Types
+
+| Input Type | Value Type | Notes |
+|------------|-----------|-------|
+| text, email, password | string | Standard text input |
+| number, range | number | Auto-converts to number |
+| checkbox | boolean | Binds to `checked` |
+| radio | string | Value of selected radio |
+| select | string | Value of selected option |
+| textarea | string | Multi-line text |
+| file | FileList | Read-only binding |
+
+### Complete Form Example
+
+```javascript
+defineComponent('registration-form', {
+    data() {
+        return {
+            username: '',
+            email: '',
+            password: '',
+            age: 18,
+            country: 'us',
+            newsletter: false,
+            plan: 'free'
+        };
+    },
+
+    methods: {
+        handleSubmit(e) {
+            console.log('Form data:', {
+                username: this.state.username,
+                email: this.state.email,
+                age: this.state.age,  // Already a number!
+                country: this.state.country,
+                newsletter: this.state.newsletter,  // Already a boolean!
+                plan: this.state.plan
+            });
+        }
+    },
+
+    template() {
+        return html`
+            <form on-submit-prevent="handleSubmit">
+                <div>
+                    <label>Username:</label>
+                    <input type="text" x-model="username" required>
+                </div>
+
+                <div>
+                    <label>Email:</label>
+                    <input type="email" x-model="email" required>
+                </div>
+
+                <div>
+                    <label>Password:</label>
+                    <input type="password" x-model="password" required>
+                </div>
+
+                <div>
+                    <label>Age:</label>
+                    <input type="number" x-model="age" min="13" max="120">
+                </div>
+
+                <div>
+                    <label>Country:</label>
+                    <select x-model="country">
+                        <option value="us">United States</option>
+                        <option value="uk">United Kingdom</option>
+                        <option value="ca">Canada</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>
+                        <input type="checkbox" x-model="newsletter">
+                        Subscribe to newsletter
+                    </label>
+                </div>
+
+                <div>
+                    <label>Plan:</label>
+                    <label><input type="radio" name="plan" value="free" x-model="plan"> Free</label>
+                    <label><input type="radio" name="plan" value="pro" x-model="plan"> Pro</label>
+                </div>
+
+                <button type="submit">Register</button>
+            </form>
+        `;
+    }
+});
+```
+
+### Chaining with Custom Handlers
+
+Combine `x-model` with event handlers for additional logic:
+
+```javascript
+<input type="text" x-model="username" on-input="${() => this.validateUsername()}">
+```
+
+---
+
+## Template Helpers
+
+### Conditional Rendering with `when()`
+
+Always use `when()` instead of ternary operators:
+
+```javascript
+import { defineComponent, html, when } from './lib/framework.js';
+
+template() {
+    return html`
+        ${when(this.state.isLoading,
+            html`<p>Loading...</p>`,
+            html`<p>Content loaded!</p>`
+        )}
+    `;
+}
+```
+
+**Nested conditionals:**
+
+```javascript
+${when(this.state.loading,
+    html`<p>Loading...</p>`,
+    when(this.state.error,
+        html`<p class="error">${this.state.error}</p>`,
+        html`<div>${this.state.content}</div>`
+    )
+)}
+```
+
+**Using functions (deferred evaluation):**
+
+```javascript
+${when(this.state.user,
+    () => html`<p>Welcome, ${this.state.user.name}!</p>`,
+    () => html`<p>Please log in</p>`
+)}
+```
+
+### List Rendering with `each()`
+
+```javascript
+import { defineComponent, html, each } from './lib/framework.js';
+
+template() {
+    return html`
+        <ul>
+            ${each(this.state.items, item => html`
+                <li>${item.name} - $${item.price}</li>
+            `)}
+        </ul>
+    `;
+}
+```
+
+**With index:**
+
+```javascript
+${each(this.state.items, (item, index) => html`
+    <li>${index + 1}. ${item.name}</li>
+`)}
+```
+
+**With key function (preserves DOM state on reorder):**
+
+```javascript
+${each(this.state.items, item => html`
+    <li>
+        <input type="text" x-model="items[${item.id}].name">
+    </li>
+`, item => item.id)}  // Key function
+```
+
+### Raw HTML with `raw()`
+
+Use only for trusted content:
+
+```javascript
+import { raw } from './lib/framework.js';
+
+// SAFE - Server-generated HTML
+${raw(this.state.serverRenderedContent)}
+
+// DANGEROUS - Never use with user input!
+${raw(this.state.userComment)}  // XSS vulnerability!
+```
+
+---
+
+## Event Handling
+
+### Event Binding Syntax
+
+**Always use `on-*` attributes:**
+
+```javascript
+<button on-click="handleClick">Click Me</button>
+<input on-input="handleInput">
+<form on-submit-prevent="handleSubmit">
+```
+
+**Available events:**
+- `on-click` - Click events
+- `on-change` - Change events (inputs, selects)
+- `on-input` - Input events (fires on every keystroke)
+- `on-submit` - Form submission
+- `on-submit-prevent` - Form submission with automatic `preventDefault()`
+- `on-mouseenter`, `on-mouseleave` - Mouse hover
+
+### Method References vs Inline Handlers
+
+```javascript
+// Method reference (recommended for complex logic)
+<button on-click="handleClick">Click</button>
+
+// Inline handler (for simple operations)
+<button on-click="${() => this.state.count++}">+1</button>
+
+// Inline with parameters
+<button on-click="${() => this.removeItem(item.id)}">Remove</button>
+```
+
+### Passing Event Data
+
+```javascript
+methods: {
+    handleClick(e) {
+        console.log('Event target:', e.target);
+        console.log('Mouse position:', e.clientX, e.clientY);
+    },
+
+    handleInput(e) {
+        console.log('Input value:', e.target.value);
+    }
+}
+```
+
+---
+
+## Component Communication
+
+### Props (Parent to Child)
+
+**Define props with defaults:**
+
+```javascript
+defineComponent('user-card', {
+    props: {
+        name: 'Guest',
+        role: 'user',
+        isAdmin: false
+    },
+
+    template() {
+        return html`
+            <div class="card">
+                <h3>${this.props.name}</h3>
+                <p>Role: ${this.props.role}</p>
+                ${when(this.props.isAdmin, html`<span class="badge">Admin</span>`)}
+            </div>
+        `;
+    }
+});
+```
+
+**Pass props from parent:**
+
+```javascript
+// In parent component template
+<user-card name="${this.state.userName}" role="admin" isAdmin="${true}"></user-card>
+```
+
+### Passing Functions and Objects
+
+Arrays, objects, and functions are automatically passed by reference:
+
+```javascript
+// Parent component
+template() {
+    return html`
+        <product-list
+            items="${this.state.products}"
+            onSelect="${this.handleProductSelect}">
+        </product-list>
+    `;
+}
+```
+
+### Children Props (Slots)
+
+Components can accept children like React:
+
+```javascript
+defineComponent('my-card', {
+    template() {
+        return html`
+            <div class="card">
+                <div class="card-body">
+                    ${this.props.children}
+                </div>
+            </div>
+        `;
+    }
+});
+
+// Usage
+<my-card>
+    <h3>Card Title</h3>
+    <p>Card content goes here</p>
+</my-card>
+```
+
+**Named slots:**
+
+```javascript
+defineComponent('my-dialog', {
+    template() {
+        const headerSlot = this.props.slots.header || [];
+        const footerSlot = this.props.slots.footer || [];
+
+        return html`
+            <div class="dialog">
+                <div class="dialog-header">${headerSlot}</div>
+                <div class="dialog-body">${this.props.children}</div>
+                <div class="dialog-footer">${footerSlot}</div>
+            </div>
+        `;
+    }
+});
+
+// Usage
+<my-dialog>
+    <div slot="header">Dialog Title</div>
+    <p>Main content</p>
+    <div slot="footer">
+        <button>OK</button>
+        <button>Cancel</button>
+    </div>
+</my-dialog>
+```
+
+### Custom Events (Child to Parent)
+
+**Emit events from child:**
+
+```javascript
+defineComponent('color-picker', {
+    methods: {
+        selectColor(color) {
+            this.dispatchEvent(new CustomEvent('color-change', {
+                bubbles: true,
+                detail: { color }
+            }));
+        }
+    },
+
+    template() {
+        return html`
+            <div>
+                <button on-click="${() => this.selectColor('red')}">Red</button>
+                <button on-click="${() => this.selectColor('blue')}">Blue</button>
+            </div>
+        `;
+    }
+});
+```
+
+**Listen in parent:**
+
+```javascript
+// In template
+<color-picker on-color-change="${(e) => this.handleColorChange(e)}"></color-picker>
+
+// In methods
+handleColorChange(e) {
+    this.state.selectedColor = e.detail.color;
+}
+```
+
+### Refs (Direct DOM Access)
+
+```javascript
+defineComponent('my-form', {
+    methods: {
+        focusInput() {
+            this.refs.nameInput.focus();
+        }
+    },
+
+    template() {
+        return html`
+            <div>
+                <input ref="nameInput" type="text" placeholder="Name">
+                <button on-click="focusInput">Focus Input</button>
+            </div>
+        `;
+    }
+});
+```
+
+---
+
+## Lifecycle Hooks
+
+### mounted()
+
+Called after the component is added to the DOM:
+
+```javascript
+mounted() {
+    // Fetch initial data
+    this.loadData();
+
+    // Set up subscriptions
+    this.unsubscribe = myStore.subscribe(state => {
+        this.state.data = state.data;
+    });
+
+    // Start timers
+    this._interval = setInterval(() => this.refresh(), 60000);
+}
+```
+
+### unmounted()
+
+Called before the component is removed. **Critical for cleanup:**
+
+```javascript
+unmounted() {
+    // Clear timers
+    if (this._interval) {
+        clearInterval(this._interval);
+    }
+
+    // Unsubscribe from stores
+    if (this.unsubscribe) {
+        this.unsubscribe();
+    }
+
+    // Remove global event listeners
+    if (this._handleResize) {
+        window.removeEventListener('resize', this._handleResize);
+    }
+}
+```
+
+### propsChanged(prop, newValue, oldValue)
+
+Called when a prop changes:
+
+```javascript
+propsChanged(prop, newValue, oldValue) {
+    if (prop === 'userId' && newValue !== oldValue) {
+        this.loadUser(newValue);
+    }
+}
+```
+
+### afterRender()
+
+Called after each render. Use sparingly:
+
+```javascript
+// Use only for imperative DOM operations
+afterRender() {
+    if (this.state.shouldFocus && this.refs.input) {
+        this.refs.input.focus();
+        this.state.shouldFocus = false;
+    }
+}
+```
+
+---
+
+## Routing
+
+### Basic Setup
+
+```javascript
+import { enableRouting } from './lib/router.js';
+
+const outlet = document.querySelector('router-outlet');
+const router = enableRouting(outlet, {
+    '/': {
+        component: 'home-page',
+        load: () => import('./pages/home.js')
+    },
+    '/about/': {
+        component: 'about-page',
+        load: () => import('./pages/about.js')
+    },
+    '/users/:id/': {
+        component: 'user-profile',
+        load: () => import('./pages/user-profile.js')
+    }
+});
+```
+
+**HTML structure:**
+
+```html
+<nav>
+    <router-link to="/">Home</router-link>
+    <router-link to="/about/">About</router-link>
+</nav>
+
+<router-outlet></router-outlet>
+```
+
+### Route Parameters
+
+```javascript
+// Route: /users/:id/
+defineComponent('user-profile', {
+    props: {
+        params: {},  // { id: '123' }
+        query: {}    // Query string params
+    },
+
+    mounted() {
+        this.loadUser(this.props.params.id);
+    },
+
+    methods: {
+        async loadUser(userId) {
+            const response = await fetch(`/api/users/${userId}`);
+            this.state.user = await response.json();
+        }
+    }
+});
+```
+
+### Query Parameters
+
+```javascript
+// URL: /search?q=hello&page=2
+
+defineComponent('search-page', {
+    props: {
+        params: {},
+        query: {}  // { q: 'hello', page: '2' }
+    },
+
+    mounted() {
+        if (this.props.query.q) {
+            this.search(this.props.query.q);
+        }
+    }
+});
+```
+
+### Programmatic Navigation
+
+```javascript
+import { getRouter } from './lib/router.js';
+
+methods: {
+    goToUser(userId) {
+        const router = getRouter();
+        router.navigate(`/users/${userId}/`);
+    },
+
+    searchWithParams(query) {
+        const router = getRouter();
+        router.navigate('/search/', { q: query, page: '1' });
+    }
+}
+```
+
+### Lazy Loading
+
+Routes load components on-demand:
+
+```javascript
+const router = enableRouting(outlet, {
+    '/': {
+        component: 'home-page',
+        load: () => import('./pages/home.js')  // Loads only when visited
+    },
+    '/admin/': {
+        component: 'admin-page',
+        require: 'admin',  // Capability guard
+        load: () => import('./pages/admin.js')
+    }
+});
+```
+
+---
+
+## State Management with Stores
+
+### Creating a Store
+
+```javascript
+import { createStore } from './lib/framework.js';
+
+const counterStore = createStore({
+    count: 0,
+
+    // Methods can be added to state
+    increment() {
+        this.count++;
+    },
+    decrement() {
+        this.count--;
+    }
+});
+
+export default counterStore;
+```
+
+### Using Stores with Auto-Subscribe
+
+The recommended approach - use the `stores` option:
+
+```javascript
+import counterStore from './stores/counter.js';
+
+defineComponent('counter-display', {
+    stores: {
+        counter: counterStore
+    },
+
+    template() {
+        return html`
+            <div>
+                <p>Count: ${this.stores.counter.count}</p>
+                <button on-click="${() => this.stores.counter.increment()}">+</button>
+            </div>
+        `;
+    }
+});
+```
+
+### Manual Subscription
+
+For more control:
+
+```javascript
+import counterStore from './stores/counter.js';
+
+defineComponent('counter-display', {
+    data() {
+        return {
+            count: 0
+        };
+    },
+
+    mounted() {
+        this.unsubscribe = counterStore.subscribe(state => {
+            this.state.count = state.count;
+        });
+    },
+
+    unmounted() {
+        if (this.unsubscribe) {
+            this.unsubscribe();
+        }
+    }
+});
+```
+
+### LocalStorage Persistence
+
+```javascript
+import { localStore } from './lib/utils.js';
+
+// Creates a store that auto-syncs to localStorage
+const userPrefs = localStore('user-prefs', {
+    theme: 'light',
+    fontSize: 16
+});
+
+// Changes automatically persist
+userPrefs.state.theme = 'dark';
+```
+
+---
+
+## Static Site Integration
+
+VDX components work seamlessly with static HTML pages, making them perfect for enhancing existing sites or static site generators.
+
+### Using Components in Static HTML
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Static Page</title>
+</head>
+<body>
+    <h1>Welcome to My Site</h1>
+
+    <!-- VDX component embedded in static page -->
+    <unit-converter from-unit="gallons" to-unit="liters" initial-value="1"></unit-converter>
+
+    <p>More static content...</p>
+
+    <script type="module">
+        import { defineComponent, html } from './dist/framework.js';
+
+        defineComponent('unit-converter', {
+            props: {
+                fromUnit: 'gallons',
+                toUnit: 'liters',
+                initialValue: 1
+            },
+
+            data() {
+                return {
+                    inputValue: 1
+                };
+            },
+
+            mounted() {
+                this.state.inputValue = parseFloat(this.props.initialValue) || 1;
+            },
+
+            methods: {
+                convert(value) {
+                    const factors = {
+                        'gallons': 3.78541,
+                        'liters': 1
+                    };
+                    const liters = value * factors[this.props.fromUnit];
+                    return (liters / factors[this.props.toUnit]).toFixed(4);
+                }
+            },
+
+            template() {
+                return html`
+                    <div>
+                        <input type="number" x-model="inputValue" step="0.1">
+                        <span>${this.props.fromUnit}</span>
+                        <span>=</span>
+                        <strong>${this.convert(this.state.inputValue)}</strong>
+                        <span>${this.props.toUnit}</span>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+### Manipulating Components with Vanilla JavaScript
+
+**Attribute changes flow into components:**
+
+```javascript
+// Update component attributes - triggers re-render
+const converter = document.querySelector('unit-converter');
+converter.setAttribute('from-unit', 'liters');
+converter.setAttribute('to-unit', 'gallons');
+```
+
+### Event Listeners
+
+Components emit standard DOM events:
+
+```javascript
+const counter = document.getElementById('myCounter');
+
+counter.addEventListener('count-changed', (e) => {
+    console.log('Count changed to:', e.detail.count);
+});
+```
+
+**Emitting events from components:**
+
+```javascript
+defineComponent('event-counter', {
+    methods: {
+        increment() {
+            this.state.count++;
+            this.dispatchEvent(new CustomEvent('count-changed', {
+                bubbles: true,
+                detail: { count: this.state.count }
+            }));
+        }
+    }
+});
+```
+
+### Passing Rich Data
+
+For complex data (arrays, objects), expose setter methods:
+
+```javascript
+defineComponent('country-list', {
+    data() {
+        return {
+            countries: []
+        };
+    },
+
+    mounted() {
+        // Expose setData method for external JavaScript
+        this.setData = (data) => {
+            this.state.countries = data.countries || [];
+        };
+    },
+
+    template() {
+        return html`
+            <ul>
+                ${each(this.state.countries, country => html`
+                    <li>${country.flag} ${country.name}</li>
+                `)}
+            </ul>
+        `;
+    }
+});
+```
+
+**Using from vanilla JavaScript:**
+
+```javascript
+const list = document.getElementById('countryList');
+list.setData({
+    countries: [
+        { flag: '🇫🇷', name: 'France' },
+        { flag: '🇩🇪', name: 'Germany' }
+    ]
+});
+```
+
+### Nested Component Hydration
+
+VDX components can be nested inside other components in static HTML:
+
+```html
+<collapsible-section title="Interactive Tools">
+    <temp-converter initial-fahrenheit="72"></temp-converter>
+    <unit-converter from-unit="miles" to-unit="kilometers"></unit-converter>
+</collapsible-section>
+```
+
+All nested components hydrate automatically - perfect for static site generators like Hugo, Jekyll, or Eleventy.
+
+### Component Boundaries
+
+**Important:** Components are boundaries between vanilla JS and VDX. Don't manipulate DOM inside components externally:
+
+```html
+<!-- GOOD: Static page with component islands -->
+<header>Static header</header>
+<main>
+    <p>Static content...</p>
+    <unit-converter></unit-converter>  <!-- Component island -->
+    <p>More static content...</p>
+</main>
+
+<!-- BAD: Don't wrap entire page in a component -->
+<site-wrapper>
+    <header>...</header>
+    <main>...entire site...</main>
+</site-wrapper>
+```
+
+---
+
+## Advanced Patterns
+
+### Computed Properties
+
+Use `computed()` for expensive calculations:
+
+```javascript
+import { computed } from './lib/utils.js';
+
+defineComponent('product-list', {
+    data() {
+        return {
+            items: [...],  // 1000 items
+            searchQuery: '',
+
+            filteredItems: computed((items, query) => {
+                console.log('Computing filtered items...');
+                return items.filter(item =>
+                    item.name.toLowerCase().includes(query.toLowerCase())
+                );
+            })
+        };
+    },
+
+    template() {
+        // Call computed with dependencies
+        const filtered = this.state.filteredItems(
+            this.state.items,
+            this.state.searchQuery
+        );
+
+        return html`
+            <input type="text" x-model="searchQuery" placeholder="Search...">
+            <p>${filtered.length} items</p>
+            ${each(filtered, item => html`<div>${item.name}</div>`)}
+        `;
+    }
+});
+```
+
+### Watch for Side Effects
+
+```javascript
+import { watch, reactive } from './lib/framework.js';
+
+mounted() {
+    this._unwatch = watch(
+        () => this.state.selectedId,
+        async (newId, oldId) => {
+            if (newId) {
+                this.state.details = await this.loadDetails(newId);
+            }
+        }
+    );
+},
+
+unmounted() {
+    if (this._unwatch) this._unwatch();
+}
+```
+
+### Async Data with `awaitThen()`
+
+```javascript
+import { defineComponent, html, awaitThen } from './lib/framework.js';
+
+defineComponent('user-profile', {
+    data() {
+        return {
+            userPromise: null
+        };
+    },
+
+    mounted() {
+        this.state.userPromise = fetch('/api/user/123').then(r => r.json());
+    },
+
+    template() {
+        return html`
+            ${awaitThen(
+                this.state.userPromise,
+                user => html`<h1>${user.name}</h1>`,
+                html`<p>Loading...</p>`,
+                error => html`<p class="error">${error.message}</p>`
+            )}
+        `;
+    }
+});
+```
+
+### Custom x-model Components
+
+Create components that work with `x-model`:
+
+```javascript
+defineComponent('my-slider', {
+    props: {
+        value: 50,
+        min: 0,
+        max: 100
+    },
+
+    methods: {
+        handleInput(e) {
+            // Use emitChange helper for x-model compatibility
+            this.emitChange(e, parseInt(e.target.value));
+        }
+    },
+
+    template() {
+        return html`
+            <input
+                type="range"
+                value="${this.props.value}"
+                min="${this.props.min}"
+                max="${this.props.max}"
+                on-input="handleInput">
+            <span>${this.props.value}</span>
+        `;
+    }
+});
+
+// Usage with x-model
+<my-slider x-model="volume" min="0" max="100"></my-slider>
+```
+
+---
+
+## Best Practices
+
+### 1. Keep Components Focused
+
+Each component should do one thing well:
+
+```javascript
+// GOOD: Focused components
+<user-avatar user="${this.state.user}"></user-avatar>
+<user-info user="${this.state.user}"></user-info>
+
+// BAD: Monolithic component
+<user-everything user="${this.state.user}" showAvatar showInfo showPosts showComments></user-everything>
+```
+
+### 2. Always Clean Up
+
+```javascript
+mounted() {
+    this._timer = setInterval(() => this.refresh(), 5000);
+    this._unsubscribe = store.subscribe(s => this.state.data = s);
+},
+
+unmounted() {
+    clearInterval(this._timer);
+    this._unsubscribe();
+}
+```
+
+### 3. Use x-model for Forms
+
+```javascript
+// GOOD: Concise
+<input type="text" x-model="username">
+
+// VERBOSE: Manual binding
+<input type="text" value="${this.state.username}"
+       on-input="${(e) => this.state.username = e.target.value}">
+```
+
+### 4. Never Mutate Arrays During Render
+
+```javascript
+// BAD: Infinite loop
+template() {
+    const sorted = this.state.items.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// GOOD: Copy first
+template() {
+    const sorted = [...this.state.items].sort((a, b) => a.name.localeCompare(b.name));
+}
+```
+
+### 5. Use `when()` for Conditionals
+
+```javascript
+// GOOD
+${when(this.state.loading, html`<spinner>`, html`<content>`)}
+
+// BAD: Ternaries are harder to read
+${this.state.loading ? html`<spinner>` : html`<content>`}
+```
+
+### 6. Validate User Input
+
+```javascript
+methods: {
+    async handleSubmit(e) {
+        e.preventDefault();
+
+        const email = this.state.email.trim();
+        if (!this.isValidEmail(email)) {
+            notify('Invalid email', 'error');
+            return;
+        }
+
+        await this.saveEmail(email);
+    },
+
+    isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+}
+```
+
+### 7. Handle Errors Gracefully
+
+```javascript
+methods: {
+    async loadData() {
+        try {
+            this.state.loading = true;
+            const response = await fetch('/api/data');
+            this.state.data = await response.json();
+        } catch (error) {
+            console.error('Failed to load:', error);
+            notify('Failed to load data', 'error');
+            this.state.data = [];
+        } finally {
+            this.state.loading = false;
+        }
+    }
+}
+```
+
+### 8. Use Stores for Shared State
+
+```javascript
+// auth-store.js
+export const authStore = createStore({
+    user: null,
+    isAuthenticated: false,
+
+    async login(credentials) { ... },
+    async logout() { ... }
+});
+
+// Any component can subscribe
+stores: { auth: authStore }
+```
+
+---
+
+## Next Steps
+
+- Explore the [Component Library](/componentlib/) for pre-built UI components
+- Check out the [Static Integration Demo](/bundle-demo/static-integration-demo.html) for embedding examples
+- Read the [API Reference](api-reference.md) for complete documentation
+- Browse the [Test Suite](/tests/) to see comprehensive examples
+- Study the [E-commerce Shop](/apps/shop/) for a full application example
+
+---
+
+## Summary
+
+VDX provides a modern development experience without the complexity:
+
+| Feature | VDX Syntax |
+|---------|-----------|
+| Reactive state | `this.state.count++` |
+| Two-way binding | `x-model="fieldName"` |
+| Event handling | `on-click="methodName"` |
+| Conditionals | `when(condition, then, else)` |
+| Lists | `each(array, item => html\`...\`)` |
+| Props | `props: { name: 'default' }` |
+| Children | `this.props.children` |
+| Lifecycle | `mounted()`, `unmounted()` |
+| Stores | `stores: { name: store }` |
+
+**Key principles:**
+1. Zero dependencies - runs directly in browsers
+2. No build step - just refresh and go
+3. Familiar patterns - feels like Vue/React
+4. Security first - automatic XSS protection
+5. Works anywhere - embed in any page
+
+Happy coding!

@@ -72,6 +72,8 @@ Then open: **http://localhost:9000/**
 
 That's it! No `npm install`, no build process, no dependencies to install.
 
+**New to VDX?** Check out the **[Step-by-Step Tutorial](docs/tutorial.md)** for a comprehensive guide covering all framework features with hands-on examples.
+
 ## VS Code Setup (Optional)
 
 For CSS and HTML syntax highlighting in components, install [es6-string-html](https://marketplace.visualstudio.com/items?itemName=Tobermory.es6-string-html).
@@ -353,6 +355,7 @@ Requires modern browsers with ES6+ support:
 
 ## Documentation
 
+- **[docs/tutorial.md](docs/tutorial.md)** - Step-by-step tutorial with hands-on examples
 - **[CLAUDE.md](CLAUDE.md)** - Quick reference for AI coding assistants
 - **[docs/components.md](docs/components.md)** - Component development patterns, props, children
 - **[docs/templates.md](docs/templates.md)** - Template system, x-model, helpers
