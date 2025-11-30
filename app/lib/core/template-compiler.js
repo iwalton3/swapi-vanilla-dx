@@ -9,18 +9,9 @@
  * @module core/template-compiler
  */
 
-import { sanitizeUrl, isHtml, isRaw } from './template.js';
+import { sanitizeUrl, isHtml, isRaw, OP } from './template.js';
 import { h, Fragment } from '../vendor/preact/index.js';
 import { componentDefinitions } from './component.js';
-
-// Op codes for the instruction-based system
-export const OP = {
-    STATIC: 0,      // Return pre-built VNode
-    SLOT: 1,        // Insert dynamic value from slot
-    TEXT: 2,        // Static text
-    ELEMENT: 3,     // Build element with props/children
-    FRAGMENT: 4,    // Build fragment
-};
 
 // Boolean attributes that should be converted to actual booleans
 const BOOLEAN_ATTRS = new Set([

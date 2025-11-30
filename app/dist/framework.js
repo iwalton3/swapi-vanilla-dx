@@ -1,7 +1,7 @@
 /**
  * VDX-Web Framework Bundle
  * https://github.com/iwalton3/vdx-web
- * Generated: 2025-11-30T04:49:34.789Z
+ * Generated: 2025-11-30T05:52:27.023Z
  *
  * Includes Preact (https://preactjs.com/)
  * Copyright (c) 2015-present Jason Miller
@@ -649,7 +649,7 @@ function diff(
 
 				if (isClassComponent) {
 
-					newVNode._component = c = new newType(newProps, componentContext);
+					newVNode._component = c = new newType(newProps, componentContext); 
 				} else {
 
 					newVNode._component = c = new BaseComponent(
@@ -1737,7 +1737,7 @@ function trackAllDependencies(obj, visited = new Set()) {
         const keys = Object.keys(obj);
         for (const key of keys) {
             try {
-                const value = obj[key];
+                const value = obj[key];  
 
                 if (typeof value === 'object' && value !== null) {
                     trackAllDependencies(value, visited);
@@ -1753,7 +1753,6 @@ function trackAllDependencies(obj, visited = new Set()) {
 
 // ============= template.js =============
 const templateCompiler = {
-    OP: OP,
     compileTemplate: compileTemplate,
     applyValues: applyValues,
     clearTemplateCache: clearTemplateCache,
@@ -1766,6 +1765,14 @@ const RAW_MARKER = Symbol('raw');
 
 const isHtml = (obj) => obj && obj[HTML_MARKER] === true;
 const isRaw = (obj) => obj && obj[RAW_MARKER] === true;
+
+const OP = {
+    STATIC: 0,      
+    SLOT: 1,        
+    TEXT: 2,        
+    ELEMENT: 3,     
+    FRAGMENT: 4,    
+};
 
 function normalizeInput(input) {
     if (input == null) return '';
@@ -1840,7 +1847,7 @@ function html(strings, ...values) {
         _compiled: compiled,
         _values: values,
         toString() {
-            return '';
+            return '';  
         }
     };
 }
@@ -1866,7 +1873,7 @@ function when(condition, thenValue, elseValue = null) {
         return {
             [HTML_MARKER]: true,
             _compiled: {
-                op: templateCompiler.OP.STATIC,
+                op: OP.STATIC,
                 vnode: null,
                 type: 'fragment',
                 wrapped: false,
@@ -1905,7 +1912,7 @@ function each(array, mapFn, keyFn = null) {
         return {
             [HTML_MARKER]: true,
             _compiled: {
-                op: templateCompiler.OP.STATIC,
+                op: OP.STATIC,
                 vnode: null,
                 type: 'fragment',
                 wrapped: false,
@@ -1940,7 +1947,7 @@ function each(array, mapFn, keyFn = null) {
             if (!r || !r._compiled) return null;
 
             const child = r._compiled;
-            const childValues = r._values;
+            const childValues = r._values;  
 
             if (child.type === 'text' && child.value && /^\s*$/.test(child.value)) {
                 return null;
@@ -1960,14 +1967,14 @@ function each(array, mapFn, keyFn = null) {
     return {
         [HTML_MARKER]: true,
         _compiled: {
-            op: templateCompiler.OP.FRAGMENT,
+            op: OP.FRAGMENT,
             type: 'fragment',
-            wrapped: false,
-            fromEach: true,
+            wrapped: false,  
+            fromEach: true,   
             children: compiledChildren
         },
         toString() {
-            return '';
+            return '';  
         }
     };
 }
@@ -2014,7 +2021,7 @@ function stripCSSComments(css) {
             while (i < len - 1 && !(css[i] === '*' && css[i + 1] === '/')) {
                 i++;
             }
-            i += 2;
+            i += 2; 
 
             result += ' ';
         } else {
@@ -2616,14 +2623,6 @@ function defineComponent(name, options) {
 
 // ============= template-compiler.js =============
 
-const OP = {
-    STATIC: 0,
-    SLOT: 1,
-    TEXT: 2,
-    ELEMENT: 3,
-    FRAGMENT: 4,
-};
-
 const BOOLEAN_ATTRS = new Set([
     'disabled', 'checked', 'selected', 'readonly', 'required',
     'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
@@ -2719,7 +2718,7 @@ function buildOpTree(node) {
             vnode: staticVNode,
 
             type: 'fragment',
-            children: [],
+            children: [],  
             isStatic: true
         };
     }
@@ -3084,7 +3083,7 @@ function resolveProp(name, def, values, component, isCustomElement) {
     }
 
     if (def.refName !== undefined) {
-        return def;
+        return def;  
     }
 
     return def.value;
@@ -3524,10 +3523,10 @@ function createStore(initial) {
 
 defineComponent('x-await-then', {
     props: {
-        promise: null,
-        then: null,
-        pending: null,
-        catch: null
+        promise: null,      
+        then: null,         
+        pending: null,      
+        catch: null         
     },
 
     data() {

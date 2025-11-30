@@ -14,6 +14,14 @@ const RAW_MARKER = Symbol('raw');
 export const isHtml = (obj) => obj && obj[HTML_MARKER] === true;
 export const isRaw = (obj) => obj && obj[RAW_MARKER] === true;
 
+// Op codes for the instruction-based system
+export const OP = {
+    STATIC: 0,      // Return pre-built VNode
+    SLOT: 1,        // Insert dynamic value from slot
+    TEXT: 2,        // Static text
+    ELEMENT: 3,     // Build element with props/children
+    FRAGMENT: 4,    // Build fragment
+};
 
 /**
  * Normalize input to prevent encoding attacks
@@ -159,7 +167,7 @@ export function when(condition, thenValue, elseValue = null) {
         return {
             [HTML_MARKER]: true,
             _compiled: {
-                op: templateCompiler.OP.STATIC,
+                op: OP.STATIC,
                 vnode: null,
                 type: 'fragment',
                 wrapped: false,
@@ -208,7 +216,7 @@ export function each(array, mapFn, keyFn = null) {
         return {
             [HTML_MARKER]: true,
             _compiled: {
-                op: templateCompiler.OP.STATIC,
+                op: OP.STATIC,
                 vnode: null,
                 type: 'fragment',
                 wrapped: false,
@@ -272,7 +280,7 @@ export function each(array, mapFn, keyFn = null) {
     return {
         [HTML_MARKER]: true,
         _compiled: {
-            op: templateCompiler.OP.FRAGMENT,
+            op: OP.FRAGMENT,
             type: 'fragment',
             wrapped: false,  // Unwrapped fragments spread their children into parent
             fromEach: true,   // Mark as from each() to distinguish from nested html() templates
