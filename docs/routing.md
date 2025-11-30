@@ -17,13 +17,13 @@ Complete guide to client-side routing with the framework.
 ## Basic Setup
 
 ```javascript
-import { Router, defineRouterOutlet, defineRouterLink } from './lib/router.js';
+import { enableRouting } from './lib/router.js';
 
-// Define router outlet component
-defineRouterOutlet();
+// Get the router outlet element
+const outlet = document.querySelector('router-outlet');
 
-// Create router with routes
-const router = new Router({
+// Create router with routes - outlet and link components are auto-registered
+const router = enableRouting(outlet, {
     '/': {
         component: 'home-page'
     },
@@ -34,12 +34,6 @@ const router = new Router({
         component: 'user-profile'
     }
 });
-
-// Set the outlet element
-router.setOutlet(document.querySelector('router-outlet'));
-
-// Define router link component
-defineRouterLink(router);
 ```
 
 **In your HTML:**
@@ -52,7 +46,7 @@ defineRouterLink(router);
 Routes are defined in `app.js` or your main entry file:
 
 ```javascript
-const router = new Router({
+const router = enableRouting(outlet, {
     '/': {
         component: 'home-page'
     },
@@ -74,7 +68,7 @@ const router = new Router({
 Define routes with `:param` syntax to capture URL segments:
 
 ```javascript
-const router = new Router({
+const router = enableRouting(outlet, {
     '/': { component: 'home-page' },
     '/users/:id/': { component: 'user-profile' },
     '/products/:category/:sku/': { component: 'product-detail' }
@@ -244,7 +238,7 @@ Clicking different users updates the `user-profile` component's `params.id` with
 For better performance, routes can be lazy-loaded using dynamic imports. This improves Time to First Contentful Paint by only loading the requested route initially:
 
 ```javascript
-const router = new Router({
+const router = enableRouting(outlet, {
     '/': {
         component: 'home-page',
         load: () => import('./home.js')  // Lazy load on demand
@@ -375,7 +369,7 @@ This serves the app with proper routing support on http://localhost:9000/
 Require specific capabilities for routes:
 
 ```javascript
-const router = new Router({
+const router = enableRouting(outlet, {
     '/': {
         component: 'home-page'
     },
@@ -416,17 +410,17 @@ router.checkCapability = (required) => {
 
 ### Custom Route Guards
 
-You can implement custom route guards by extending the router:
+You can implement custom route guards using the `beforeEach` hook:
 
 ```javascript
-router.beforeNavigate = (to, from) => {
+router.beforeEach(async ({ path, query, route }) => {
     // Return false to prevent navigation
-    if (to === '/private/' && !isAuthenticated()) {
+    if (path === '/private/' && !isAuthenticated()) {
         router.navigate('/login/');
         return false;
     }
     return true;
-};
+});
 ```
 
 ## Best Practices
@@ -435,7 +429,7 @@ router.beforeNavigate = (to, from) => {
 
 ```javascript
 // ✅ GOOD - Organized by feature
-const router = new Router({
+const router = enableRouting(outlet, {
     // Public routes
     '/': { component: 'home-page', load: () => import('./home.js') },
     '/about/': { component: 'about-page', load: () => import('./about.js') },
@@ -454,7 +448,7 @@ const router = new Router({
 
 ```javascript
 // ✅ GOOD - Lazy load all routes
-const router = new Router({
+const router = enableRouting(outlet, {
     '/': {
         component: 'home-page',
         load: () => import('./home.js')  // Only loads when visited
@@ -482,7 +476,7 @@ Be consistent with trailing slashes:
 Enable router debugging:
 
 ```javascript
-const router = new Router({
+const router = enableRouting(outlet, {
     // ... routes
 }, {
     debug: true  // Logs route changes

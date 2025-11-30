@@ -394,7 +394,7 @@ addItem(item) {
 import { enableRouting } from './lib/router.js';
 
 const outlet = document.getElementsByTagName('router-outlet')[0];
-const router = new enableRouting(outlet, {
+const router = enableRouting(outlet, {
     '/': {
         component: 'home-page',
         load: () => import('./home.js')  // Optional lazy loading

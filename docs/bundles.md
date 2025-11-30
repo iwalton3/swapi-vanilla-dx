@@ -57,17 +57,13 @@ Router library for client-side routing:
 **Usage:**
 ```html
 <script type="module">
-  import { Router, defineRouterOutlet, defineRouterLink } from './dist/router.js';
+  import { enableRouting } from './dist/router.js';
 
-  defineRouterOutlet();
-
-  const router = new Router({
+  const outlet = document.querySelector('router-outlet');
+  const router = enableRouting(outlet, {
     '/': { component: 'home-page' },
-    '/about': { component: 'about-page' }
+    '/about/': { component: 'about-page' }
   });
-
-  router.setOutlet(document.querySelector('router-outlet'));
-  defineRouterLink(router);
 </script>
 
 <router-outlet></router-outlet>

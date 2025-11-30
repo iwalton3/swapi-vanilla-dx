@@ -446,6 +446,7 @@ prefs.state.theme = 'dark'; // Automatically saves to localStorage
 Enables routing.
 
 **Parameters:**
+- `outlet` (HTMLElement) - Router outlet element
 - `routes` (object) - Route configuration
 - `options` (object) - Router options (optional)
 
@@ -494,29 +495,6 @@ Set the router outlet element.
 
 ```javascript
 router.setOutlet(document.querySelector('router-outlet'));
-```
-
-### defineRouterOutlet()
-
-Defines the `<router-outlet>` custom element.
-
-```javascript
-import { defineRouterOutlet } from './lib/router.js';
-
-defineRouterOutlet();
-```
-
-### defineRouterLink(router)
-
-Defines the `<router-link>` custom element.
-
-**Parameters:**
-- `router` (Router) - Router instance
-
-```javascript
-import { defineRouterLink } from './lib/router.js';
-
-defineRouterLink(router);
 ```
 
 ## Utilities API

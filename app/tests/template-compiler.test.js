@@ -377,16 +377,30 @@ describe('Template Compiler Edge Cases', function(it) {
 });
 
 describe('Template Compiler Performance', function(it) {
-    it('caches identical templates', () => {
+    it('caches same reference templates (HTM-style optimization)', () => {
         clearTemplateCache();
 
+        // HTM-style: Same array reference = cache hit (O(1) lookup)
+        const strings = ['<div>', '</div>'];
+
+        compileTemplate(strings);
+        compileTemplate(strings);  // Same reference = cache hit
+
+        assert.equal(getTemplateCacheSize(), 1, 'Should cache same-reference templates');
+    });
+
+    it('creates separate cache entries for different references', () => {
+        clearTemplateCache();
+
+        // Different array objects get different cache entries (even with same content)
+        // This is correct behavior for HTM-style reference-based caching
         const strings1 = ['<div>', '</div>'];
         const strings2 = ['<div>', '</div>'];
 
         compileTemplate(strings1);
         compileTemplate(strings2);
 
-        assert.equal(getTemplateCacheSize(), 1, 'Should cache identical templates');
+        assert.equal(getTemplateCacheSize(), 2, 'Different references = different cache entries');
     });
 
     it('distinguishes different templates', () => {

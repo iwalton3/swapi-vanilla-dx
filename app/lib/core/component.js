@@ -429,6 +429,9 @@ export function defineComponent(name, options) {
                 options.unmounted.call(this);
             }
 
+            // Clear refs to prevent memory leaks from stale DOM references
+            this.refs = {};
+
             // Unmount Preact tree
             preactRender(null, this);
         }

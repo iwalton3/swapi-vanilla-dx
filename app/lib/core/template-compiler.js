@@ -20,6 +20,13 @@ import { sanitizeUrl, isHtml, isRaw } from './template.js';
 import { h, Fragment } from '../vendor/preact/index.js';
 import { componentDefinitions } from './component.js';
 
+// Boolean attributes that should be converted to actual booleans (module-level for performance)
+const BOOLEAN_ATTRS = new Set([
+    'disabled', 'checked', 'selected', 'readonly', 'required',
+    'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
+    'muted', 'open', 'reversed', 'hidden', 'async', 'defer'
+]);
+
 /**
  * Get a nested value from an object using a dot-separated path
  * @param {Object} obj - The object to traverse
@@ -135,18 +142,42 @@ function setNestedValue(obj, path, value) {
  * @typedef {AppliedTextNode | AppliedElementNode | AppliedFragmentNode} AppliedNode
  */
 
-/** @type {Map<string, CompiledNode>} Template cache - keyed by template strings joined */
+/**
+ * Template cache - keyed by statics array reference
+ *
+ * HTM-inspired optimization: Tagged template literals produce a frozen array
+ * that is the SAME object reference for the same template in code.
+ * Using the array directly as Map key means:
+ * - No string join overhead on cache lookup
+ * - O(1) reference equality check instead of O(n) string comparison
+ * - No extra memory for cache keys
+ *
+ * @type {Map<TemplateStringsArray, CompiledNode>}
+ */
 const templateCache = new Map();
 
 /** Maximum template cache size before cleanup */
 const MAX_CACHE_SIZE = 500;
 
-/** Track cache access times for LRU eviction */
+/** Track cache access times for LRU eviction (keyed by statics array) */
 const cacheAccessTimes = new Map();
 
 /**
+ * HTM-inspired optimization: VNode cache for static subtrees
+ *
+ * Static subtrees (no dynamic slots) produce the same VNode every time.
+ * We cache the VNode on the compiled node itself using a WeakMap so:
+ * - Subsequent renders reuse the exact same VNode object
+ * - Preact sees same reference and skips reconciliation entirely
+ * - Memory is automatically freed when compiled template is GC'd
+ *
+ * @type {WeakMap<CompiledNode, import('../vendor/preact/index.js').VNode>}
+ */
+const staticVNodeCache = new WeakMap();
+
+/**
  * Compile a template string into an optimized tree structure
- * @param {Array<string>} strings - Template literal string parts
+ * @param {TemplateStringsArray} strings - Template literal string parts (frozen array)
  * @returns {CompiledNode} Compiled template with slots for dynamic values
  * @example
  * const strings = ['<div class="', '">', '</div>'];
@@ -154,13 +185,13 @@ const cacheAccessTimes = new Map();
  * // Returns structured tree with slot for class value
  */
 export function compileTemplate(strings) {
-    // Create cache key from static strings
-    const cacheKey = strings.join('␞'); // Use rare char as separator
-
-    if (templateCache.has(cacheKey)) {
+    // HTM-inspired optimization: Use statics array directly as Map key
+    // Tagged template literals produce the same frozen array reference for
+    // the same template in code, so we get O(1) lookup via reference equality
+    if (templateCache.has(strings)) {
         // Update access time for LRU tracking
-        cacheAccessTimes.set(cacheKey, Date.now());
-        return templateCache.get(cacheKey);
+        cacheAccessTimes.set(strings, Date.now());
+        return templateCache.get(strings);
     }
 
     // Parse the full template string with slot markers
@@ -175,9 +206,13 @@ export function compileTemplate(strings) {
     // Parse XML into tree structure (preserves all nodes, allows self-closing tags)
     const compiled = parseXMLToTree(fullTemplate);
 
-    // Cache the compiled template
-    templateCache.set(cacheKey, compiled);
-    cacheAccessTimes.set(cacheKey, Date.now());
+    // HTM-inspired optimization: Mark static subtrees
+    // Static subtrees have no dynamic slots and can be cached as VNodes
+    markStaticSubtrees(compiled);
+
+    // Cache the compiled template using statics array as key
+    templateCache.set(strings, compiled);
+    cacheAccessTimes.set(strings, Date.now());
 
     // Trigger cleanup if cache is getting too large
     if (templateCache.size > MAX_CACHE_SIZE) {
@@ -190,19 +225,99 @@ export function compileTemplate(strings) {
 /**
  * Clean up least recently used templates when cache grows too large
  * Removes oldest 25% of entries based on access time
+ *
+ * Note: Keys are statics arrays (object references), which is fine for Map operations
  */
 function cleanupTemplateCache() {
-    // Sort entries by access time
+    // Sort entries by access time (statics array → timestamp)
     const entries = Array.from(cacheAccessTimes.entries())
         .sort((a, b) => a[1] - b[1]); // Sort by timestamp (oldest first)
 
     // Remove oldest 25% of entries
     const toRemove = Math.floor(entries.length * 0.25);
     for (let i = 0; i < toRemove; i++) {
-        const [key] = entries[i];
-        templateCache.delete(key);
-        cacheAccessTimes.delete(key);
+        const [staticsArray] = entries[i];
+        templateCache.delete(staticsArray);
+        cacheAccessTimes.delete(staticsArray);
     }
+}
+
+/**
+ * HTM-inspired optimization: Mark subtrees as static or dynamic
+ *
+ * A node is static if:
+ * - It's a text node with a static value (no slot)
+ * - It's an element with all static attributes, no events with slots, and all children static
+ * - It's a fragment with all static children
+ *
+ * Static subtrees can have their VNodes cached and reused on subsequent renders.
+ *
+ * @param {CompiledNode} node - The node to analyze
+ * @returns {boolean} True if the node is static
+ */
+function markStaticSubtrees(node) {
+    if (!node) return true;
+
+    if (node.type === 'text') {
+        // Text is static if it has no slot (dynamic value)
+        node.isStatic = node.slot === undefined;
+        return node.isStatic;
+    }
+
+    if (node.type === 'fragment') {
+        // Fragment is static if all children are static
+        let allChildrenStatic = true;
+        for (const child of node.children || []) {
+            if (!markStaticSubtrees(child)) {
+                allChildrenStatic = false;
+            }
+        }
+        node.isStatic = allChildrenStatic;
+        return node.isStatic;
+    }
+
+    if (node.type === 'element') {
+        let isStatic = true;
+
+        // Check attributes for slots
+        for (const attrDef of Object.values(node.attrs || {})) {
+            if (attrDef.slot !== undefined || attrDef.slots !== undefined ||
+                attrDef.xModel !== undefined || attrDef.refName !== undefined) {
+                isStatic = false;
+                break;
+            }
+        }
+
+        // Check events for slots (event handlers with slot references are dynamic)
+        if (isStatic) {
+            for (const eventDef of Object.values(node.events || {})) {
+                if (eventDef.slot !== undefined || eventDef.xModel !== undefined) {
+                    isStatic = false;
+                    break;
+                }
+            }
+        }
+
+        // Check children recursively
+        if (isStatic) {
+            for (const child of node.children || []) {
+                if (!markStaticSubtrees(child)) {
+                    isStatic = false;
+                    // Don't break - we still want to mark children
+                }
+            }
+        } else {
+            // Even if this node is dynamic, mark children so we can cache static subtrees
+            for (const child of node.children || []) {
+                markStaticSubtrees(child);
+            }
+        }
+
+        node.isStatic = isStatic;
+        return isStatic;
+    }
+
+    return true;
 }
 
 /**
@@ -537,9 +652,6 @@ function nodeToTree(node) {
                     // Shouldn't happen, but fallback just in case
                     attrs[name] = { value };
                 }
-            } else if (value.match(/__PROP_/)) {
-                // Prop marker
-                slotProps[name] = value;
             } else {
                 // Static attribute
                 attrs[name] = { value };
@@ -588,6 +700,13 @@ function nodeToTree(node) {
 export function applyValues(compiled, values, component = null) {
     if (!compiled) return null;
 
+    // HTM-inspired optimization: Return cached VNode for static subtrees
+    // Static nodes have no dynamic slots, so the VNode is always identical
+    // Reusing the same VNode object lets Preact skip reconciliation entirely
+    if (compiled.isStatic && staticVNodeCache.has(compiled)) {
+        return staticVNodeCache.get(compiled);
+    }
+
     if (compiled.type === 'fragment') {
         // Apply values to children recursively, returns Preact vnodes
         const children = compiled.children
@@ -605,7 +724,14 @@ export function applyValues(compiled, values, component = null) {
 
         // Return Preact Fragment vnode
         const props = compiled.key !== undefined ? { key: compiled.key } : null;
-        return h(Fragment, props, ...children);
+        const vnode = h(Fragment, props, ...children);
+
+        // Cache VNode for static subtrees
+        if (compiled.isStatic) {
+            staticVNodeCache.set(compiled, vnode);
+        }
+
+        return vnode;
     }
 
     if (compiled.type === 'text') {
@@ -691,19 +817,12 @@ export function applyValues(compiled, values, component = null) {
         }
 
         // Static text - return value directly
-        return compiled.raw !== undefined ? compiled.raw : compiled.value;
+        return compiled.value;
     }
 
     if (compiled.type === 'element') {
         const props = {};
         const isCustomElement = componentDefinitions.has(compiled.tag);
-
-        // Boolean attributes that should be converted to actual booleans
-        const booleanAttrs = new Set([
-            'disabled', 'checked', 'selected', 'readonly', 'required',
-            'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
-            'muted', 'open', 'reversed', 'hidden', 'async', 'defer'
-        ]);
 
         // Apply attribute slots
         for (const [name, attrDef] of Object.entries(compiled.attrs)) {
@@ -816,7 +935,7 @@ export function applyValues(compiled, values, component = null) {
             }
 
             // Convert boolean attributes
-            if (booleanAttrs.has(propName)) {
+            if (BOOLEAN_ATTRS.has(propName)) {
                 // Only convert actual boolean values, keep strings as-is
                 if (value === true) {
                     props[propName] = true;
@@ -1027,11 +1146,18 @@ export function applyValues(compiled, values, component = null) {
             }
         }
 
-        return isCustomElement ? h(compiled.tag, {
+        const vnode = isCustomElement ? h(compiled.tag, {
             ...props,
             _vdxChildren: childrenToSet,
             _vdxSlots: slotsToSet
         }) : h(compiled.tag, props, ...children);
+
+        // Cache VNode for static subtrees
+        if (compiled.isStatic) {
+            staticVNodeCache.set(compiled, vnode);
+        }
+
+        return vnode;
     }
 
     return null;

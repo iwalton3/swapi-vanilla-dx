@@ -72,13 +72,13 @@ export default defineComponent('shop-app', {
         const outlet = this.querySelector('router-outlet');
         if (outlet) {
             router.setOutlet(outlet);
-            // If no hash or empty hash, redirect to /shop/
-            if (!window.location.hash || window.location.hash === '#' || window.location.hash === '#/') {
-                window.location.hash = '/shop/';
-            }
-            // Trigger initial route handling
-            router.handleRoute();
         }
+        // If no hash or empty hash, redirect to /shop/
+        if (!window.location.hash || window.location.hash === '#' || window.location.hash === '#/') {
+            window.location.hash = '/shop/';
+        }
+        // Trigger initial route handling
+        router.handleRoute();
     },
 
     methods: {
