@@ -1,7 +1,7 @@
 /**
  * VDX-Web Framework Bundle
  * https://github.com/iwalton3/vdx-web
- * Generated: 2025-11-29T20:26:35.437Z
+ * Generated: 2025-11-30T02:23:56.978Z
  *
  * Includes Preact (https://preactjs.com/)
  * Copyright (c) 2015-present Jason Miller
@@ -649,7 +649,7 @@ function diff(
 
 				if (isClassComponent) {
 
-					newVNode._component = c = new newType(newProps, componentContext);
+					newVNode._component = c = new newType(newProps, componentContext); 
 				} else {
 
 					newVNode._component = c = new BaseComponent(
@@ -1737,7 +1737,7 @@ function trackAllDependencies(obj, visited = new Set()) {
         const keys = Object.keys(obj);
         for (const key of keys) {
             try {
-                const value = obj[key];
+                const value = obj[key];  
 
                 if (typeof value === 'object' && value !== null) {
                     trackAllDependencies(value, visited);
@@ -1839,7 +1839,7 @@ function html(strings, ...values) {
         _compiled: compiled,
         _values: values,
         toString() {
-            return '';
+            return '';  
         }
     };
 }
@@ -1864,7 +1864,7 @@ function when(condition, thenValue, elseValue = null) {
 
         return {
             [HTML_MARKER]: true,
-            _compiled: null,
+            _compiled: null,  
             toString() {
                 return '';
             }
@@ -1931,7 +1931,7 @@ function each(array, mapFn, keyFn = null) {
             if (!r || !r._compiled) return null;
 
             const child = r._compiled;
-            const childValues = r._values;
+            const childValues = r._values;  
 
             if (child.type === 'text' && child.value && /^\s*$/.test(child.value)) {
                 return null;
@@ -1952,12 +1952,12 @@ function each(array, mapFn, keyFn = null) {
         [HTML_MARKER]: true,
         _compiled: {
             type: 'fragment',
-            wrapped: false,
-            fromEach: true,
+            wrapped: false,  
+            fromEach: true,   
             children: compiledChildren
         },
         toString() {
-            return '';
+            return '';  
         }
     };
 }
@@ -2004,7 +2004,7 @@ function stripCSSComments(css) {
             while (i < len - 1 && !(css[i] === '*' && css[i + 1] === '/')) {
                 i++;
             }
-            i += 2;
+            i += 2; 
 
             result += ' ';
         } else {
@@ -2292,6 +2292,8 @@ function defineComponent(name, options) {
             if (options.unmounted) {
                 options.unmounted.call(this);
             }
+
+            this.refs = {};
 
             preactRender(null, this);
         }
@@ -2604,6 +2606,20 @@ function defineComponent(name, options) {
 
 // ============= template-compiler.js =============
 
+const OP = {
+    STATIC: 0,      
+    SLOT: 1,        
+    TEXT: 2,        
+    ELEMENT: 3,     
+    FRAGMENT: 4,    
+};
+
+const BOOLEAN_ATTRS = new Set([
+    'disabled', 'checked', 'selected', 'readonly', 'required',
+    'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
+    'muted', 'open', 'reversed', 'hidden', 'async', 'defer'
+]);
+
 function getNestedValue(obj, path) {
     if (!path || !obj) return undefined;
     if (!path.includes('.')) return obj[path];
@@ -2644,12 +2660,9 @@ const cacheAccessTimes = new Map();
 
 function compileTemplate(strings) {
 
-    const cacheKey = strings.join('␞');
-
-    if (templateCache.has(cacheKey)) {
-
-        cacheAccessTimes.set(cacheKey, Date.now());
-        return templateCache.get(cacheKey);
+    if (templateCache.has(strings)) {
+        cacheAccessTimes.set(strings, Date.now());
+        return templateCache.get(strings);
     }
 
     let fullTemplate = '';
@@ -2660,10 +2673,11 @@ function compileTemplate(strings) {
         }
     }
 
-    const compiled = parseXMLToTree(fullTemplate);
+    const parsed = parseXMLToTree(fullTemplate);
+    const compiled = buildOpTree(parsed);
 
-    templateCache.set(cacheKey, compiled);
-    cacheAccessTimes.set(cacheKey, Date.now());
+    templateCache.set(strings, compiled);
+    cacheAccessTimes.set(strings, Date.now());
 
     if (templateCache.size > MAX_CACHE_SIZE) {
         cleanupTemplateCache();
@@ -2673,20 +2687,585 @@ function compileTemplate(strings) {
 }
 
 function cleanupTemplateCache() {
-
     const entries = Array.from(cacheAccessTimes.entries())
         .sort((a, b) => a[1] - b[1]);
 
     const toRemove = Math.floor(entries.length * 0.25);
     for (let i = 0; i < toRemove; i++) {
-        const [key] = entries[i];
-        templateCache.delete(key);
-        cacheAccessTimes.delete(key);
+        const [staticsArray] = entries[i];
+        templateCache.delete(staticsArray);
+        cacheAccessTimes.delete(staticsArray);
     }
 }
 
-function parseXMLToTree(xmlString) {
+function buildOpTree(node) {
+    if (!node) return null;
 
+    if (isFullyStatic(node)) {
+
+        const staticVNode = buildStaticVNode(node);
+        return {
+            op: OP.STATIC,
+            vnode: staticVNode,
+
+            type: 'fragment',
+            children: [],  
+            isStatic: true
+        };
+    }
+
+    if (node.type === 'text') {
+        if (node.slot !== undefined) {
+            return {
+                op: OP.SLOT,
+                index: node.slot,
+                context: node.context || 'content',
+                type: 'text'
+            };
+        }
+        return {
+            op: OP.TEXT,
+            value: node.value,
+            type: 'text',
+            isStatic: true
+        };
+    }
+
+    if (node.type === 'fragment') {
+        const children = (node.children || [])
+            .map(child => buildOpTree(child))
+            .filter(Boolean);
+
+        return {
+            op: OP.FRAGMENT,
+            children,
+            wrapped: node.wrapped,
+            fromEach: node.fromEach,
+            key: node.key,
+            type: 'fragment',
+            isStatic: children.every(c => c.isStatic)
+        };
+    }
+
+    if (node.type === 'element') {
+        const isCustomElement = componentDefinitions.has(node.tag);
+
+        const staticProps = {};
+        const dynamicProps = [];
+
+        for (const [name, attrDef] of Object.entries(node.attrs || {})) {
+            if (attrDef.value !== undefined && attrDef.slot === undefined &&
+                attrDef.slots === undefined && attrDef.xModel === undefined &&
+                attrDef.refName === undefined) {
+
+                staticProps[name] = attrDef.value;
+            } else {
+
+                dynamicProps.push({ name, def: attrDef });
+            }
+        }
+
+        const events = [];
+        for (const [eventName, eventDef] of Object.entries(node.events || {})) {
+            events.push({ name: eventName, def: eventDef });
+        }
+
+        const children = (node.children || [])
+            .map(child => buildOpTree(child))
+            .filter(Boolean);
+
+        return {
+            op: OP.ELEMENT,
+            tag: node.tag,
+            staticProps,
+            dynamicProps,
+            events,
+            children,
+            isCustomElement,
+            key: node.key,
+            type: 'element',
+            isStatic: dynamicProps.length === 0 && events.length === 0 &&
+                      children.every(c => c.isStatic)
+        };
+    }
+
+    return null;
+}
+
+function isFullyStatic(node) {
+    if (!node) return true;
+
+    if (node.type === 'text') {
+        return node.slot === undefined;
+    }
+
+    if (node.type === 'fragment') {
+        return (node.children || []).every(isFullyStatic);
+    }
+
+    if (node.type === 'element') {
+
+        if (componentDefinitions.has(node.tag)) {
+            return false;
+        }
+
+        for (const attrDef of Object.values(node.attrs || {})) {
+            if (attrDef.slot !== undefined || attrDef.slots !== undefined ||
+                attrDef.xModel !== undefined || attrDef.refName !== undefined) {
+                return false;
+            }
+        }
+
+        if (Object.keys(node.events || {}).length > 0) {
+            return false;
+        }
+
+        return (node.children || []).every(isFullyStatic);
+    }
+
+    return true;
+}
+
+function buildStaticVNode(node) {
+    if (!node) return null;
+
+    if (node.type === 'text') {
+        return node.value || '';
+    }
+
+    if (node.type === 'fragment') {
+        const children = (node.children || [])
+            .map(child => buildStaticVNode(child))
+            .filter(child => child !== null && child !== undefined);
+
+        if (children.length === 0) return null;
+        if (children.length === 1) return children[0];
+
+        return h(Fragment, null, ...children);
+    }
+
+    if (node.type === 'element') {
+        const props = {};
+
+        for (const [name, attrDef] of Object.entries(node.attrs || {})) {
+            if (attrDef.value !== undefined) {
+                let propName = name;
+                if (name === 'class') propName = 'className';
+                else if (name === 'for') propName = 'htmlFor';
+
+                if (BOOLEAN_ATTRS.has(propName)) {
+                    props[propName] = attrDef.value === propName || attrDef.value === 'true' || attrDef.value === true;
+                } else {
+                    props[propName] = attrDef.value;
+                }
+            }
+        }
+
+        const children = (node.children || [])
+            .map(child => buildStaticVNode(child))
+            .filter(child => child !== null && child !== undefined);
+
+        return h(node.tag, props, ...children);
+    }
+
+    return null;
+}
+
+function applyValues(compiled, values, component = null) {
+    if (!compiled) return null;
+
+    if (compiled.op === OP.STATIC) {
+        return compiled.vnode;
+    }
+
+    switch (compiled.op) {
+        case OP.TEXT:
+            return compiled.value;
+
+        case OP.SLOT:
+            return resolveSlotValue(compiled, values, component);
+
+        case OP.FRAGMENT:
+            return applyFragment(compiled, values, component);
+
+        case OP.ELEMENT:
+            return applyElement(compiled, values, component);
+
+        default:
+
+            return applyValuesLegacy(compiled, values, component);
+    }
+}
+
+function resolveSlotValue(compiled, values, component) {
+    let value = values[compiled.index];
+
+    if (isHtml(value)) {
+        if (!('_compiled' in value)) {
+            console.error('[applyValues] html() template missing _compiled');
+            return null;
+        }
+        if (value._compiled === null) return null;
+        return applyValues(value._compiled, value._values || [], component);
+    }
+
+    if (isRaw(value)) {
+        return h('span', { dangerouslySetInnerHTML: { __html: value.toString() } });
+    }
+
+    if (value === null || value === undefined) return null;
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) return null;
+
+        const hasVNodes = value.some(item => {
+            if (!item) return false;
+            if (typeof item === 'string' || typeof item === 'number') return true;
+            if (typeof item === 'object' && ('type' in item || 'props' in item || '__' in item)) return true;
+            return false;
+        });
+
+        if (hasVNodes) return value;
+        return value.join('');
+    }
+
+    if (typeof value === 'object') {
+        return Object.prototype.toString.call(value);
+    }
+
+    if (typeof value === 'string') {
+        value = value.replace(/[\uFEFF\u200B-\u200D\uFFFE\uFFFF]/g, '');
+    }
+
+    return value;
+}
+
+function applyFragment(compiled, values, component) {
+    const children = compiled.children
+        .map(child => {
+            const childValues = child._itemValues !== undefined ? child._itemValues : values;
+            return applyValues(child, childValues, component);
+        })
+        .filter(child => child !== undefined && child !== false && child !== null);
+
+    if (children.length === 0) return null;
+
+    const props = compiled.key !== undefined ? { key: compiled.key } : null;
+    return h(Fragment, props, ...children);
+}
+
+function applyElement(compiled, values, component) {
+    const props = { ...compiled.staticProps };
+    const isCustomElement = compiled.isCustomElement;
+
+    for (const { name, def } of compiled.dynamicProps) {
+        const value = resolveProp(name, def, values, component, isCustomElement);
+        if (value !== undefined) {
+
+            let propName = name;
+            if (name === 'class') propName = 'className';
+            else if (name === 'for') propName = 'htmlFor';
+            else if (name === 'style' && isCustomElement) {
+                props._vdxStyle = value;
+                continue;
+            }
+
+            if (name === '__ref__') {
+
+                props.ref = createRefCallback(def.refName, component);
+                continue;
+            }
+
+            if (BOOLEAN_ATTRS.has(propName)) {
+                props[propName] = value === true ? true : value === false ? false :
+                    typeof value === 'string' ? value : Boolean(value);
+            } else {
+                props[propName] = value;
+            }
+        }
+    }
+
+    for (const { name, def } of compiled.events) {
+        const handler = resolveEventHandler(name, def, values, component, isCustomElement);
+        if (handler) {
+            if (name === 'clickoutside' || name === 'click-outside') {
+                props.ref = createClickOutsideRef(handler, props.ref);
+            } else {
+                const propName = 'on' + name.charAt(0).toUpperCase() + name.slice(1);
+                props[propName] = handler;
+            }
+        }
+    }
+
+    if (compiled.key !== undefined) {
+        props.key = compiled.key;
+    }
+
+    const children = compiled.children
+        .map(child => {
+            const childValues = child._itemValues !== undefined ? child._itemValues : values;
+            return applyValues(child, childValues, component);
+        })
+        .filter(child => child !== undefined && child !== false);
+
+    if (isCustomElement && children.length > 0) {
+        const { defaultChildren, namedSlots } = groupChildrenBySlot(children);
+        return h(compiled.tag, {
+            ...props,
+            _vdxChildren: defaultChildren,
+            _vdxSlots: namedSlots
+        });
+    }
+
+    return h(compiled.tag, props, ...children);
+}
+
+function resolveProp(name, def, values, component, isCustomElement) {
+
+    if (def.xModel !== undefined) {
+        if (component && component.state) {
+            let value = getNestedValue(component.state, def.xModel);
+
+            if (def.context === 'x-model-checked') {
+                return !!value;
+            } else if (def.context === 'x-model-radio') {
+                return value === def.radioValue;
+            } else if (def.context === 'x-model-value' && isCustomElement &&
+                       (typeof value === 'object' || typeof value === 'function') && value !== null) {
+                return value;
+            }
+            return value;
+        }
+        return (def.context === 'x-model-checked' || def.context === 'x-model-radio') ? false : '';
+    }
+
+    if (def.slot !== undefined || def.slots !== undefined) {
+        let value;
+
+        if (def.slots) {
+
+            value = def.template;
+            for (const slotIndex of def.slots) {
+                const slotMarker = `__SLOT_${slotIndex}__`;
+                const slotValue = values[slotIndex];
+                value = value.replace(slotMarker, String(slotValue ?? ''));
+            }
+        } else {
+            value = values[def.slot];
+            if (def.template) {
+                value = def.template.replace(`__SLOT_${def.slot}__`, String(value));
+            }
+        }
+
+        if (def.context === 'url') {
+            return sanitizeUrl(value) || '';
+        } else if (def.context === 'custom-element-attr') {
+            return value;
+        }
+
+        if (value !== undefined && value !== null && typeof value !== 'boolean') {
+            return String(value);
+        }
+        return value;
+    }
+
+    if (def.refName !== undefined) {
+        return def;  
+    }
+
+    return def.value;
+}
+
+function createRefCallback(refName, component) {
+    return (el) => {
+        if (component) {
+            if (el) {
+                component.refs[refName] = el;
+            } else {
+                delete component.refs[refName];
+            }
+        }
+    };
+}
+
+function createClickOutsideRef(handler, existingRef) {
+    let lastEl = null;
+
+    return (el) => {
+        if (existingRef) existingRef(el);
+
+        if (lastEl && lastEl._clickOutsideHandler) {
+            document.removeEventListener('click', lastEl._clickOutsideHandler);
+            delete lastEl._clickOutsideHandler;
+        }
+
+        if (el) {
+            const documentHandler = (e) => {
+                if (!el.contains(e.target)) {
+                    handler(e);
+                }
+            };
+            el._clickOutsideHandler = documentHandler;
+            document.addEventListener('click', documentHandler);
+            lastEl = el;
+        } else {
+            lastEl = null;
+        }
+    };
+}
+
+function resolveEventHandler(eventName, def, values, component, isCustomElement) {
+    let handler = null;
+
+    if (def.xModel !== undefined) {
+
+        const propName = def.xModel;
+        handler = (e) => {
+            if (component && component.state) {
+                let value;
+
+                if (def.customElement) {
+                    value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
+                } else {
+                    const target = e.target;
+
+                    if (target.type === 'checkbox') {
+                        value = target.checked;
+                    } else if (target.type === 'radio') {
+                        if (target.checked) {
+                            value = target.value;
+                        } else {
+                            return;
+                        }
+                    } else if (target.type === 'number' || target.type === 'range') {
+                        value = target.valueAsNumber;
+                        if (isNaN(value)) value = target.value;
+                    } else if (target.type === 'file') {
+                        value = target.files;
+                    } else {
+                        value = target.value;
+                    }
+                }
+
+                setNestedValue(component.state, propName, value);
+            }
+        };
+    } else if (def.slot !== undefined) {
+        handler = values[def.slot];
+    } else if (def.handler && typeof def.handler === 'function') {
+        handler = def.handler;
+    } else if (def.method && component && component[def.method]) {
+        handler = component[def.method].bind(component);
+    }
+
+    if (handler && typeof handler === 'function') {
+
+        if (def.modifier === 'prevent') {
+            const orig = handler;
+            handler = (e) => { e.preventDefault(); return orig(e); };
+        }
+        if (def.modifier === 'stop') {
+            const orig = handler;
+            handler = (e) => { e.stopPropagation(); return orig(e); };
+        }
+
+        if (def._chainWith) {
+            const firstHandler = resolveEventHandler(eventName, def._chainWith, values, component, isCustomElement);
+            if (firstHandler) {
+                const secondHandler = handler;
+                handler = (e) => { firstHandler(e); secondHandler(e); };
+            }
+        }
+
+        if (isCustomElement && !def.xModel) {
+            const orig = handler;
+            handler = (e) => {
+                const value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
+                return orig(e, value);
+            };
+        }
+    }
+
+    return handler;
+}
+
+function groupChildrenBySlot(children) {
+    const defaultChildren = [];
+    const namedSlots = {};
+
+    for (const child of children) {
+        if (child && typeof child === 'object' && child.props && child.props.slot) {
+            const slotName = child.props.slot;
+            if (!namedSlots[slotName]) {
+                namedSlots[slotName] = [];
+            }
+            namedSlots[slotName].push(child);
+        } else {
+            defaultChildren.push(child);
+        }
+    }
+
+    return { defaultChildren, namedSlots: Object.keys(namedSlots).length > 0 ? namedSlots : {} };
+}
+
+function applyValuesLegacy(compiled, values, component) {
+    if (!compiled) return null;
+
+    if (compiled.type === 'fragment') {
+        const children = (compiled.children || [])
+            .map(child => {
+                const childValues = child._itemValues !== undefined ? child._itemValues : values;
+                return applyValues(child, childValues, component);
+            })
+            .filter(child => child !== undefined && child !== false && child !== null);
+
+        if (children.length === 0) return null;
+
+        const props = compiled.key !== undefined ? { key: compiled.key } : null;
+        return h(Fragment, props, ...children);
+    }
+
+    if (compiled.type === 'text') {
+        if (compiled.slot !== undefined) {
+            return resolveSlotValue({ index: compiled.slot, context: compiled.context }, values, component);
+        }
+        return compiled.value;
+    }
+
+    if (compiled.type === 'element') {
+
+        const converted = {
+            op: OP.ELEMENT,
+            tag: compiled.tag,
+            staticProps: {},
+            dynamicProps: [],
+            events: [],
+            children: compiled.children || [],
+            isCustomElement: componentDefinitions.has(compiled.tag),
+            key: compiled.key
+        };
+
+        for (const [name, attrDef] of Object.entries(compiled.attrs || {})) {
+            if (attrDef.value !== undefined && attrDef.slot === undefined &&
+                attrDef.slots === undefined && attrDef.xModel === undefined &&
+                attrDef.refName === undefined) {
+                converted.staticProps[name] = attrDef.value;
+            } else {
+                converted.dynamicProps.push({ name, def: attrDef });
+            }
+        }
+
+        for (const [eventName, eventDef] of Object.entries(compiled.events || {})) {
+            converted.events.push({ name: eventName, def: eventDef });
+        }
+
+        return applyElement(converted, values, component);
+    }
+
+    return null;
+}
+
+function parseXMLToTree(xmlString) {
     const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
                           'link', 'meta', 'param', 'source', 'track', 'wbr'];
 
@@ -2698,19 +3277,13 @@ function parseXMLToTree(xmlString) {
                           'novalidate', 'formnovalidate', 'itemscope'];
 
     xmlString = xmlString.replace(tagPattern, (fullMatch, tagName, attrs) => {
-
-        if (fullMatch.startsWith('</')) {
-            return fullMatch;
-        }
+        if (fullMatch.startsWith('</')) return fullMatch;
 
         let processedAttrs = attrs;
         for (const boolAttr of booleanAttrs) {
-
             const pattern = new RegExp(`(\\s${boolAttr})(?=\\s|>|/|$)`, 'gi');
-
             const parts = processedAttrs.split(/("[^"]*"|'[^']*')/);
             processedAttrs = parts.map((part, index) => {
-
                 if (index % 2 === 0) {
                     return part.replace(pattern, `$1="${boolAttr}"`);
                 }
@@ -2724,11 +3297,7 @@ function parseXMLToTree(xmlString) {
     voidElements.forEach(tag => {
         const regex = new RegExp(`<${tag}(\\s[^>]*)?>`, 'gi');
         xmlString = xmlString.replace(regex, (match, attrs) => {
-
-            if (match.trimEnd().endsWith('/>')) {
-                return match;
-            }
-
+            if (match.trimEnd().endsWith('/>')) return match;
             return `<${tag}${attrs || ''} />`;
         });
     });
@@ -2739,9 +3308,6 @@ function parseXMLToTree(xmlString) {
     const parseError = doc.querySelector('parsererror');
     if (parseError) {
         console.error('[parseXMLToTree] Parse error:', parseError.textContent);
-        console.error('[parseXMLToTree] Input:', xmlString);
-        console.error('[parseXMLToTree] Processed XML:', `<root>${xmlString}</root>`);
-
         return { type: 'fragment', wrapped: false, children: [] };
     }
 
@@ -2754,7 +3320,6 @@ function parseXMLToTree(xmlString) {
     for (const node of root.childNodes) {
         const tree = nodeToTree(node);
         if (tree) {
-
             if (tree.type === 'fragment') {
                 children.push(...tree.children);
             } else {
@@ -2763,15 +3328,10 @@ function parseXMLToTree(xmlString) {
         }
     }
 
-    return {
-        type: 'fragment',
-        wrapped: false,
-        children
-    };
+    return { type: 'fragment', wrapped: false, children };
 }
 
 function nodeToTree(node) {
-
     if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent;
 
@@ -2785,39 +3345,22 @@ function nodeToTree(node) {
         }
 
         if (text.includes('__SLOT_')) {
-
             const parts = text.split(/(__SLOT_\d+__)/);
             const children = parts
                 .filter(part => part)
                 .map(part => {
-                    const slotMatch = part.match(/^__SLOT_(\d+)__$/);
-                    if (slotMatch) {
-                        return {
-                            type: 'text',
-                            slot: parseInt(slotMatch[1], 10),
-                            context: 'content'
-                        };
+                    const match = part.match(/^__SLOT_(\d+)__$/);
+                    if (match) {
+                        return { type: 'text', slot: parseInt(match[1], 10), context: 'content' };
                     }
-                    return {
-                        type: 'text',
-                        value: part
-                    };
+                    return { type: 'text', value: part };
                 });
-
-            return {
-                type: 'fragment',
-                wrapped: false,
-                children
-            };
+            return { type: 'fragment', wrapped: false, children };
         }
 
         if (text) {
-            return {
-                type: 'text',
-                value: text
-            };
+            return { type: 'text', value: text };
         }
-
         return null;
     }
 
@@ -2825,7 +3368,6 @@ function nodeToTree(node) {
         const tag = node.tagName.toLowerCase();
         const attrs = {};
         const events = {};
-        let slotProps = {};
 
         for (const attr of node.attributes) {
             const name = attr.name;
@@ -2835,58 +3377,23 @@ function nodeToTree(node) {
                 const isCustomElement = componentDefinitions.has(tag);
 
                 if (isCustomElement) {
-
-                    attrs['value'] = {
-                        xModel: value,
-                        context: 'x-model-value'
-                    };
-                    events['change'] = {
-                        xModel: value,
-                        modifier: null,
-                        customElement: true
-                    };
+                    attrs['value'] = { xModel: value, context: 'x-model-value' };
+                    events['change'] = { xModel: value, modifier: null, customElement: true };
                 } else {
-
                     const inputType = node.getAttribute('type');
 
                     if (inputType === 'checkbox') {
-
-                        attrs['checked'] = {
-                            xModel: value,
-                            context: 'x-model-checked'
-                        };
-                        events['change'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        attrs['checked'] = { xModel: value, context: 'x-model-checked' };
+                        events['change'] = { xModel: value, modifier: null };
                     } else if (inputType === 'radio') {
-
                         const radioValue = node.getAttribute('value');
-                        attrs['checked'] = {
-                            xModel: value,
-                            radioValue: radioValue,
-                            context: 'x-model-radio'
-                        };
-                        events['change'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        attrs['checked'] = { xModel: value, radioValue, context: 'x-model-radio' };
+                        events['change'] = { xModel: value, modifier: null };
                     } else if (inputType === 'file') {
-
-                        events['change'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        events['change'] = { xModel: value, modifier: null };
                     } else {
-
-                        attrs['value'] = {
-                            xModel: value,
-                            context: 'x-model-value'
-                        };
-                        events['input'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        attrs['value'] = { xModel: value, context: 'x-model-value' };
+                        events['input'] = { xModel: value, modifier: null };
                     }
                 }
                 continue;
@@ -2898,10 +3405,9 @@ function nodeToTree(node) {
             }
 
             if (name.startsWith('on-')) {
-
                 const fullEventName = name.substring(3);
-
                 let eventName, modifier;
+
                 if (fullEventName === 'click-outside') {
                     eventName = 'clickoutside';
                     modifier = null;
@@ -2912,31 +3418,18 @@ function nodeToTree(node) {
                 }
 
                 const slotMatch = value.match(/^__SLOT_(\d+)__$/);
-
                 let newHandler;
+
                 if (slotMatch) {
-                    newHandler = {
-                        slot: parseInt(slotMatch[1], 10),
-                        modifier: modifier
-                    };
+                    newHandler = { slot: parseInt(slotMatch[1], 10), modifier };
                 } else if (value.match(/__EVENT_/)) {
-
-                    newHandler = {
-                        handler: value,
-                        modifier: modifier
-                    };
+                    newHandler = { handler: value, modifier };
                 } else {
-
-                    newHandler = {
-                        method: value,
-                        modifier: modifier
-                    };
+                    newHandler = { method: value, modifier };
                 }
 
                 if (events[eventName]) {
-
-                    const existingHandler = events[eventName];
-                    newHandler._chainWith = existingHandler;
+                    newHandler._chainWith = events[eventName];
                 }
 
                 events[eventName] = newHandler;
@@ -2946,8 +3439,8 @@ function nodeToTree(node) {
             const slotMatch = value.match(/^__SLOT_(\d+)__$/);
             if (slotMatch) {
                 const slotIndex = parseInt(slotMatch[1], 10);
-
                 let context = 'attribute';
+
                 if (name === 'href' || name === 'src' || name === 'action') {
                     context = 'url';
                 } else if (name.startsWith('on')) {
@@ -2955,37 +3448,19 @@ function nodeToTree(node) {
                 } else if (name === 'style' || name === 'srcdoc') {
                     context = 'dangerous';
                 } else if (tag.includes('-')) {
-
                     context = 'custom-element-attr';
                 }
 
-                attrs[name] = {
-                    slot: slotIndex,
-                    context,
-                    attrName: name
-                };
+                attrs[name] = { slot: slotIndex, context, attrName: name };
             } else if (value.includes('__SLOT_')) {
-
                 const matches = value.match(/__SLOT_(\d+)__/g);
                 if (matches && matches.length >= 1) {
-
                     const slots = matches.map(m => parseInt(m.match(/\d+/)[0], 10));
-
-                    attrs[name] = {
-                        slots: slots,
-                        context: 'attribute',
-                        attrName: name,
-                        template: value
-                    };
+                    attrs[name] = { slots, context: 'attribute', attrName: name, template: value };
                 } else {
-
                     attrs[name] = { value };
                 }
-            } else if (value.match(/__PROP_/)) {
-
-                slotProps[name] = value;
             } else {
-
                 attrs[name] = { value };
             }
         }
@@ -2994,7 +3469,6 @@ function nodeToTree(node) {
         for (const child of node.childNodes) {
             const childTree = nodeToTree(child);
             if (childTree) {
-
                 if (childTree.type === 'fragment') {
                     children.push(...childTree.children);
                 } else {
@@ -3003,426 +3477,11 @@ function nodeToTree(node) {
             }
         }
 
-        return {
-            type: 'element',
-            tag,
-            attrs,
-            events,
-            slotProps,
-            children
-        };
+        return { type: 'element', tag, attrs, events, slotProps: {}, children };
     }
 
     if (node.nodeType === Node.COMMENT_NODE) {
         return null;
-    }
-
-    return null;
-}
-
-function applyValues(compiled, values, component = null) {
-    if (!compiled) return null;
-
-    if (compiled.type === 'fragment') {
-
-        const children = compiled.children
-            .map(child => {
-
-                const childValues = child._itemValues !== undefined ? child._itemValues : values;
-                return applyValues(child, childValues, component);
-            })
-            .filter(child => child !== undefined && child !== false && child !== null);
-
-        if (children.length === 0) {
-            return null;
-        }
-
-        const props = compiled.key !== undefined ? { key: compiled.key } : null;
-        return h(Fragment, props, ...children);
-    }
-
-    if (compiled.type === 'text') {
-        if (compiled.slot !== undefined) {
-            let value = values[compiled.slot];
-
-            if (isHtml(value)) {
-
-                if (!('_compiled' in value)) {
-                    console.error('[applyValues] html() template missing _compiled property - this should not happen');
-                    return null;
-                }
-
-                const compiledValue = value._compiled;
-
-                if (compiledValue === null) {
-                    return null;
-                }
-
-                return applyValues(compiledValue, value._values || [], component);
-            }
-
-            if (isRaw(value)) {
-                return h('span', {
-                    dangerouslySetInnerHTML: { __html: value.toString() }
-                });
-            }
-
-            if (value === null || value === undefined) {
-                return null;
-            }
-
-            if (Array.isArray(value)) {
-
-                if (value.length === 0) {
-                    return null;
-                }
-
-                const hasVNodesOrText = value.some(item => {
-                    if (!item) return false;
-
-                    if (typeof item === 'string' || typeof item === 'number') return true;
-
-                    if (typeof item === 'object' && ('type' in item || 'props' in item || '__' in item)) return true;
-                    return false;
-                });
-
-                if (hasVNodesOrText) {
-
-                    return value;
-                }
-
-                return value.join('');
-            }
-
-            if (typeof value === 'object') {
-
-                return Object.prototype.toString.call(value);
-            }
-
-            if (typeof value === 'string') {
-
-                value = value.replace(/[\uFEFF\u200B-\u200D\uFFFE\uFFFF]/g, '');
-            }
-
-            return value;
-        }
-
-        return compiled.raw !== undefined ? compiled.raw : compiled.value;
-    }
-
-    if (compiled.type === 'element') {
-        const props = {};
-        const isCustomElement = componentDefinitions.has(compiled.tag);
-
-        const booleanAttrs = new Set([
-            'disabled', 'checked', 'selected', 'readonly', 'required',
-            'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
-            'muted', 'open', 'reversed', 'hidden', 'async', 'defer'
-        ]);
-
-        for (const [name, attrDef] of Object.entries(compiled.attrs)) {
-            let value;
-
-            if (attrDef.xModel !== undefined) {
-
-                if (component && component.state) {
-                    value = getNestedValue(component.state, attrDef.xModel);
-
-                    if (attrDef.context === 'x-model-checked') {
-                        value = !!value;
-                    }
-
-                    else if (attrDef.context === 'x-model-radio') {
-                        value = (value === attrDef.radioValue);
-                    }
-
-                    else if (attrDef.context === 'x-model-value' && isCustomElement && (typeof value === 'object' || typeof value === 'function') && value !== null) {
-                        props[name] = value;
-                        continue;
-                    }
-                } else {
-                    value = (attrDef.context === 'x-model-checked' || attrDef.context === 'x-model-radio') ? false : '';
-                }
-            } else if (attrDef.slot !== undefined || attrDef.slots !== undefined) {
-
-                if (attrDef.slots) {
-
-                    value = attrDef.template;
-                    for (const slotIndex of attrDef.slots) {
-                        const slotMarker = `__SLOT_${slotIndex}__`;
-                        const slotValue = values[slotIndex];
-                        value = value.replace(slotMarker, String(slotValue !== null && slotValue !== undefined ? slotValue : ''));
-                    }
-                } else {
-
-                    value = values[attrDef.slot];
-
-                    if (attrDef.template) {
-
-                        const slotMarker = `__SLOT_${attrDef.slot}__`;
-                        value = attrDef.template.replace(slotMarker, String(value));
-                    }
-                }
-
-                if (attrDef.context === 'url') {
-                    value = sanitizeUrl(value) || '';
-                } else if (attrDef.context === 'custom-element-attr') {
-
-                    props[name] = value;
-                    continue;
-                } else if (attrDef.context === 'x-model-value') {
-
-                    if (isCustomElement && (typeof value === 'object' || typeof value === 'function') && value !== null) {
-                        props[name] = value;
-                        continue;
-                    }
-
-                    if (typeof value !== 'object' && typeof value !== 'function') {
-                        value = String(value);
-                    }
-                } else if (attrDef.context === 'attribute') {
-
-                    if (value !== undefined && value !== null && typeof value !== 'boolean') {
-                        value = String(value);
-                    }
-                }
-            } else if (attrDef.value !== undefined) {
-                value = attrDef.value;
-            } else if (attrDef.refName !== undefined) {
-
-                const refName = attrDef.refName;
-                props.ref = (el) => {
-                    if (component) {
-                        if (el) {
-                            component.refs[refName] = el;
-                        } else {
-
-                            delete component.refs[refName];
-                        }
-                    }
-                };
-                continue;
-            } else {
-                continue;
-            }
-
-            if (value === undefined || value === null) {
-                continue;
-            }
-
-            let propName = name;
-            if (name === 'class') {
-                propName = 'className';
-            } else if (name === 'for') {
-                propName = 'htmlFor';
-            } else if (name === 'style' && isCustomElement) {
-
-                props._vdxStyle = value;
-                continue;
-            }
-
-            if (booleanAttrs.has(propName)) {
-
-                if (value === true) {
-                    props[propName] = true;
-                } else if (value === false) {
-                    props[propName] = false;
-                } else if (typeof value === 'string') {
-
-                    props[propName] = value;
-                } else {
-
-                    props[propName] = Boolean(value);
-                }
-            } else {
-                props[propName] = value;
-            }
-        }
-
-        const resolveHandler = (eventDef) => {
-            let handler = null;
-
-            if (eventDef.xModel !== undefined) {
-
-                const propName = eventDef.xModel;
-                handler = (e) => {
-                    if (component && component.state) {
-                        let value;
-
-                        if (eventDef.customElement) {
-                            value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
-                        } else {
-
-                            const target = e.target;
-
-                            if (target.type === 'checkbox') {
-                                value = target.checked;
-                            } else if (target.type === 'radio') {
-
-                                if (target.checked) {
-                                    value = target.value;
-                                } else {
-                                    return;
-                                }
-                            } else if (target.type === 'number' || target.type === 'range') {
-
-                                value = target.valueAsNumber;
-
-                                if (isNaN(value)) {
-                                    value = target.value;
-                                }
-                            } else if (target.type === 'file') {
-
-                                value = target.files;
-                            } else {
-
-                                value = target.value;
-                            }
-                        }
-
-                        setNestedValue(component.state, propName, value);
-                    }
-                };
-            } else if (eventDef.slot !== undefined) {
-                handler = values[eventDef.slot];
-            } else if (eventDef.handler && typeof eventDef.handler === 'function') {
-                handler = eventDef.handler;
-            } else if (eventDef.method && component && component[eventDef.method]) {
-                handler = component[eventDef.method].bind(component);
-            }
-
-            if (handler && typeof handler === 'function') {
-
-                if (eventDef.modifier === 'prevent') {
-                    const originalHandler = handler;
-                    handler = (e) => {
-                        e.preventDefault();
-                        return originalHandler(e);
-                    };
-                }
-                if (eventDef.modifier === 'stop') {
-                    const originalHandler = handler;
-                    handler = (e) => {
-                        e.stopPropagation();
-                        return originalHandler(e);
-                    };
-                }
-            }
-
-            return handler;
-        };
-
-        for (const [eventName, eventDef] of Object.entries(compiled.events)) {
-
-            if (eventName === 'clickoutside' || eventName === 'click-outside') {
-                const clickOutsideHandler = resolveHandler(eventDef);
-                if (clickOutsideHandler && typeof clickOutsideHandler === 'function') {
-
-                    const existingRef = props.ref;
-
-                    let lastEl = null;
-
-                    props.ref = (el) => {
-
-                        if (existingRef) existingRef(el);
-
-                        if (lastEl && lastEl._clickOutsideHandler) {
-                            document.removeEventListener('click', lastEl._clickOutsideHandler);
-                            delete lastEl._clickOutsideHandler;
-                        }
-
-                        if (el) {
-
-                            const documentHandler = (e) => {
-                                if (!el.contains(e.target)) {
-                                    clickOutsideHandler(e);
-                                }
-                            };
-
-                            el._clickOutsideHandler = documentHandler;
-                            document.addEventListener('click', documentHandler);
-                            lastEl = el;
-                        } else {
-                            lastEl = null;
-                        }
-                    };
-                }
-                continue;
-            }
-
-            const propName = 'on' + eventName.charAt(0).toUpperCase() + eventName.slice(1);
-            let handler = resolveHandler(eventDef);
-
-            if (eventDef._chainWith && handler) {
-                const firstHandler = resolveHandler(eventDef._chainWith);
-                if (firstHandler) {
-
-                    const secondHandler = handler;
-                    handler = (e) => {
-                        firstHandler(e);
-                        secondHandler(e);
-                    };
-                }
-            }
-
-            if (isCustomElement && handler && typeof handler === 'function' && !eventDef.xModel) {
-                const originalHandler = handler;
-                handler = (e) => {
-
-                    const value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
-                    return originalHandler(e, value);
-                };
-            }
-
-            if (handler && typeof handler === 'function') {
-                props[propName] = handler;
-            }
-        }
-
-        if (compiled.key !== undefined) {
-            props.key = compiled.key;
-        }
-
-        const children = compiled.children
-            .map(child => {
-
-                const childValues = child._itemValues !== undefined ? child._itemValues : values;
-                return applyValues(child, childValues, component);
-            })
-            .filter(child => child !== undefined && child !== false);
-
-        let childrenToSet = [];
-        let slotsToSet = {};
-
-        if (isCustomElement && children.length > 0) {
-
-            const defaultChildren = [];
-            const namedSlots = {};
-
-            for (const child of children) {
-
-                if (child && typeof child === 'object' && child.props && child.props.slot) {
-                    const slotName = child.props.slot;
-                    if (!namedSlots[slotName]) {
-                        namedSlots[slotName] = [];
-                    }
-                    namedSlots[slotName].push(child);
-                } else {
-                    defaultChildren.push(child);
-                }
-            }
-
-            childrenToSet = defaultChildren;
-            if (Object.keys(namedSlots).length > 0) {
-                slotsToSet = namedSlots;
-            }
-        }
-
-        return isCustomElement ? h(compiled.tag, {
-            ...props,
-            _vdxChildren: childrenToSet,
-            _vdxSlots: slotsToSet
-        }) : h(compiled.tag, props, ...children);
     }
 
     return null;
@@ -3506,10 +3565,10 @@ function createStore(initial) {
 
 defineComponent('x-await-then', {
     props: {
-        promise: null,
-        then: null,
-        pending: null,
-        catch: null
+        promise: null,      
+        then: null,         
+        pending: null,      
+        catch: null         
     },
 
     data() {

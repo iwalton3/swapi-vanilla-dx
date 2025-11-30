@@ -1,5 +1,8 @@
 /**
  * Tests for Template Compiler System
+ *
+ * Note: These tests focus on BEHAVIOR (correct output) rather than internal structure.
+ * The compiler's internal representation is an implementation detail that may change.
  */
 
 import { describe, assert } from './test-runner.js';
@@ -35,8 +38,12 @@ describe('Template Compiler', function(it) {
         const compiled = compileTemplate(strings);
 
         assert.ok(compiled, 'Should return compiled template');
-        assert.equal(compiled.type, 'fragment', 'Should be a fragment');
-        assert.ok(compiled.children.length > 0, 'Should have children');
+
+        // Test behavior: renders correctly
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, []);
+        preactRender(vnode, container);
+        assert.equal(container.textContent, 'Hello World', 'Should render Hello World');
     });
 
     it('caches compiled templates', () => {
@@ -56,73 +63,96 @@ describe('Template Compiler', function(it) {
 
         assert.ok(compiled, 'Should compile');
 
-        const element = compiled.children[0];
-        assert.equal(element.type, 'element', 'Should have element');
-        assert.equal(element.tag, 'div', 'Should be div');
-        assert.ok(element.children.length > 0, 'Should have text child');
-
-        const textNode = element.children[0];
-        assert.equal(textNode.type, 'text', 'Should be text node');
-        assert.equal(textNode.slot, 0, 'Should have slot 0');
+        // Test behavior: slot value is interpolated
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['Hello Slot']);
+        preactRender(vnode, container);
+        assert.equal(container.textContent, 'Hello Slot', 'Should render slot value');
     });
 
     it('compiles template with attribute slot', () => {
         const strings = ['<div class="', '">Content</div>'];
         const compiled = compileTemplate(strings);
 
-        const element = compiled.children[0];
-        assert.ok(element.attrs.class, 'Should have class attribute');
-        assert.equal(element.attrs.class.slot, 0, 'Should have slot reference');
-        assert.equal(element.attrs.class.context, 'attribute', 'Should have attribute context');
+        // Test behavior: attribute is applied
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['my-class']);
+        preactRender(vnode, container);
+
+        const div = container.querySelector('div');
+        assert.equal(div.className, 'my-class', 'Should apply class attribute');
     });
 
     it('compiles template with multiple slots', () => {
         const strings = ['<div id="', '" class="', '">', '</div>'];
         const compiled = compileTemplate(strings);
 
-        const element = compiled.children[0];
-        assert.equal(element.attrs.id.slot, 0, 'First slot in id');
-        assert.equal(element.attrs.class.slot, 1, 'Second slot in class');
-        assert.equal(element.children[0].slot, 2, 'Third slot in content');
+        // Test behavior: all slots are applied correctly
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['my-id', 'my-class', 'Content']);
+        preactRender(vnode, container);
+
+        const div = container.querySelector('div');
+        assert.equal(div.id, 'my-id', 'Should apply id');
+        assert.equal(div.className, 'my-class', 'Should apply class');
+        assert.equal(div.textContent, 'Content', 'Should apply content');
     });
 
     it('detects URL context for href attribute', () => {
         const strings = ['<a href="', '">Link</a>'];
         const compiled = compileTemplate(strings);
 
-        const element = compiled.children[0];
-        assert.equal(element.attrs.href.context, 'url', 'Should detect URL context');
+        // Test behavior: dangerous URLs are sanitized
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['javascript:alert(1)']);
+        preactRender(vnode, container);
+
+        const a = container.querySelector('a');
+        assert.equal(a.getAttribute('href'), '', 'Should sanitize javascript: URL');
     });
 
     it('detects custom element attributes', () => {
         const strings = ['<x-component data="', '"></x-component>'];
         const compiled = compileTemplate(strings);
 
-        const element = compiled.children[0];
-        assert.equal(element.tag, 'x-component', 'Should be custom element');
-        assert.equal(element.attrs.data.context, 'custom-element-attr', 'Should detect custom element context');
+        // Test behavior: object props passed to custom element
+        const container = document.createElement('div');
+        const data = { foo: 'bar' };
+        const vnode = applyValues(compiled, [data]);
+        preactRender(vnode, container);
+
+        const el = container.querySelector('x-component');
+        assert.equal(el.data, data, 'Should pass object to custom element');
     });
 
     it('compiles event handler attribute', () => {
         const strings = ['<button on-click="', '">Click</button>'];
         const compiled = compileTemplate(strings);
 
-        const element = compiled.children[0];
-        assert.ok(element.events.click, 'Should have click event');
-        assert.equal(element.events.click.slot, 0, 'Should have slot for handler');
+        // Test behavior: event handler is called
+        let clicked = false;
+        const handler = () => { clicked = true; };
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, [handler]);
+        preactRender(vnode, container);
+
+        const button = container.querySelector('button');
+        button.click();
+        assert.ok(clicked, 'Should call event handler');
     });
 
     it('compiles nested elements', () => {
         const strings = ['<div><span>', '</span></div>'];
         const compiled = compileTemplate(strings);
 
-        const div = compiled.children[0];
-        assert.equal(div.tag, 'div', 'Should have div');
+        // Test behavior: nested structure renders correctly
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['Nested']);
+        preactRender(vnode, container);
 
-        const span = div.children[0];
-        assert.equal(span.type, 'element', 'Should have span');
-        assert.equal(span.tag, 'span', 'Should be span tag');
-        assert.ok(span.children.length > 0, 'Span should have text child');
+        const span = container.querySelector('div span');
+        assert.ok(span, 'Should have nested span');
+        assert.equal(span.textContent, 'Nested', 'Should have slot content');
     });
 });
 
@@ -168,7 +198,7 @@ describe('Template Value Application', function(it) {
         const container = document.createElement('div');
         const strings = ['<div title="', '">Content</div>'];
         const compiled = compileTemplate(strings);
-        const applied = applyValues(compiled, ['"><script>alert(1)</script>']);
+        const applied = applyValues(compiled, ['\"><script>alert(1)</script>']);
 
         preactRender(applied, container);
 
@@ -176,7 +206,7 @@ describe('Template Value Application', function(it) {
         // Preact/browser should escape quotes in attributes
         // The output will contain "><script with escaped quotes: &quot;><script
         // This is safe - the quotes prevent breaking out of the attribute context
-        assert.ok(!div.outerHTML.includes('"><script'), 'Should not allow unescaped attribute injection');
+        assert.ok(!div.outerHTML.includes('\"><script'), 'Should not allow unescaped attribute injection');
         assert.ok(div.outerHTML.includes('&quot;') || div.outerHTML.includes('&#34;'), 'Should escape quotes');
     });
 
@@ -317,7 +347,10 @@ describe('Template Compiler Edge Cases', function(it) {
         const compiled = compileTemplate(strings);
 
         assert.ok(compiled, 'Should compile');
-        assert.equal(compiled.type, 'fragment', 'Should be fragment');
+
+        // Should produce valid (empty or null) output
+        const vnode = applyValues(compiled, []);
+        // Empty templates should not crash
     });
 
     it('handles whitespace-only template', () => {
@@ -332,47 +365,68 @@ describe('Template Compiler Edge Cases', function(it) {
         const compiled = compileTemplate(strings);
 
         assert.ok(compiled, 'Should compile');
+
+        // Test behavior: slot value is rendered
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['Just a slot']);
+        preactRender(vnode, container);
+        assert.equal(container.textContent, 'Just a slot', 'Should render slot value');
     });
 
     it('handles self-closing tags', () => {
         const strings = ['<img src="', '" />'];
         const compiled = compileTemplate(strings);
 
-        const element = compiled.children[0];
-        assert.equal(element.tag, 'img', 'Should parse img tag');
-        assert.ok(element.attrs.src, 'Should have src attribute');
+        // Test behavior: img is rendered with src
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['test.png']);
+        preactRender(vnode, container);
+
+        const img = container.querySelector('img');
+        assert.ok(img, 'Should render img');
+        assert.equal(img.getAttribute('src'), 'test.png', 'Should have src attribute');
     });
 
     it('handles deeply nested structure', () => {
         const strings = ['<div><ul><li><a href="', '">Link</a></li></ul></div>'];
         const compiled = compileTemplate(strings);
 
-        const div = compiled.children[0];
-        const ul = div.children[0];
-        const li = ul.children[0];
-        const a = li.children[0];
+        // Test behavior: deeply nested slot is applied
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['https://example.com']);
+        preactRender(vnode, container);
 
-        assert.equal(a.tag, 'a', 'Should parse deeply nested structure');
-        assert.ok(a.attrs.href, 'Should have href with slot');
+        const a = container.querySelector('div ul li a');
+        assert.ok(a, 'Should render deeply nested a');
+        assert.equal(a.getAttribute('href'), 'https://example.com', 'Should apply href');
     });
 
     it('handles multiple root elements', () => {
         const strings = ['<div>First</div><div>Second</div>'];
         const compiled = compileTemplate(strings);
 
-        assert.equal(compiled.type, 'fragment', 'Should be fragment');
-        assert.equal(compiled.children.length, 2, 'Should have 2 children');
-        assert.equal(compiled.children[0].tag, 'div', 'First should be div');
-        assert.equal(compiled.children[1].tag, 'div', 'Second should be div');
+        // Test behavior: both elements are rendered
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, []);
+        preactRender(vnode, container);
+
+        const divs = container.querySelectorAll('div');
+        assert.equal(divs.length, 2, 'Should have 2 divs');
+        assert.equal(divs[0].textContent, 'First', 'First div content');
+        assert.equal(divs[1].textContent, 'Second', 'Second div content');
     });
 
     it('handles comments', () => {
         const strings = ['<div><!-- comment -->', '</div>'];
         const compiled = compileTemplate(strings);
 
-        // Comments should be stripped during parsing
-        const element = compiled.children[0];
-        assert.equal(element.tag, 'div', 'Should parse div');
+        // Comments should be stripped, slot should work
+        const container = document.createElement('div');
+        const vnode = applyValues(compiled, ['Content']);
+        preactRender(vnode, container);
+
+        const div = container.querySelector('div');
+        assert.equal(div.textContent, 'Content', 'Should render content after comment');
     });
 });
 
@@ -424,5 +478,19 @@ describe('Template Compiler Performance', function(it) {
         clearTemplateCache();
 
         assert.equal(getTemplateCacheSize(), 0, 'Should clear cache');
+    });
+
+    it('returns pre-built VNode for static templates', () => {
+        clearTemplateCache();
+        const strings = ['<div>Static Content</div>'];
+        const compiled = compileTemplate(strings);
+
+        // Static templates should have isStatic flag
+        assert.ok(compiled.isStatic, 'Static template should be marked as static');
+
+        // Applying values multiple times should return same reference for static
+        const vnode1 = applyValues(compiled, []);
+        const vnode2 = applyValues(compiled, []);
+        assert.equal(vnode1, vnode2, 'Static VNode should be reused');
     });
 });

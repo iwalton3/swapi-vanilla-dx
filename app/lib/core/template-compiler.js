@@ -1,17 +1,10 @@
 /**
- * Template Compiler - Compiles HTML templates directly to Preact VNodes
+ * Template Compiler - Optimized Op-Based Architecture
  *
- * Architecture:
- * 1. Parse template string + values into structured AST
- * 2. Create slots for dynamic values
- * 3. Cache compiled template
- * 4. On render: fill slots with values, generate Preact VNodes
- *
- * Performance benefits:
- * - No regex on every render
- * - No HTML string parsing
- * - Direct VNode generation
- * - Optimal Preact reconciliation
+ * Key optimizations:
+ * 1. Static subtrees are pre-built as VNodes at compile time
+ * 2. Flat op-based structure minimizes runtime branching
+ * 3. applyValues is a simple interpreter that just executes ops
  *
  * @module core/template-compiler
  */
@@ -20,7 +13,16 @@ import { sanitizeUrl, isHtml, isRaw } from './template.js';
 import { h, Fragment } from '../vendor/preact/index.js';
 import { componentDefinitions } from './component.js';
 
-// Boolean attributes that should be converted to actual booleans (module-level for performance)
+// Op codes for the instruction-based system
+const OP = {
+    STATIC: 0,      // Return pre-built VNode
+    SLOT: 1,        // Insert dynamic value from slot
+    TEXT: 2,        // Static text
+    ELEMENT: 3,     // Build element with props/children
+    FRAGMENT: 4,    // Build fragment
+};
+
+// Boolean attributes that should be converted to actual booleans
 const BOOLEAN_ATTRS = new Set([
     'disabled', 'checked', 'selected', 'readonly', 'required',
     'multiple', 'autofocus', 'autoplay', 'controls', 'loop',
@@ -29,9 +31,6 @@ const BOOLEAN_ATTRS = new Set([
 
 /**
  * Get a nested value from an object using a dot-separated path
- * @param {Object} obj - The object to traverse
- * @param {string} path - Dot-separated path like "form.interests"
- * @returns {*} The value at the path, or undefined if not found
  */
 function getNestedValue(obj, path) {
     if (!path || !obj) return undefined;
@@ -48,9 +47,6 @@ function getNestedValue(obj, path) {
 
 /**
  * Set a nested value in an object using a dot-separated path
- * @param {Object} obj - The object to modify
- * @param {string} path - Dot-separated path like "form.interests"
- * @param {*} value - The value to set
  */
 function setNestedValue(obj, path, value) {
     if (!path || !obj) return;
@@ -72,129 +68,30 @@ function setNestedValue(obj, path, value) {
 }
 
 /**
- * @typedef {Object} CompiledTextNode
- * @property {'text'} type - Node type
- * @property {string} [value] - Static text content
- * @property {number} [slot] - Dynamic slot index
- * @property {string} [context] - Context for escaping (content, attribute, url, etc.)
- */
-
-/**
- * @typedef {Object} AttributeDefinition
- * @property {string} [value] - Static attribute value
- * @property {number} [slot] - Dynamic slot index
- * @property {string} [context] - Context for escaping
- * @property {string} [attrName] - Attribute name
- * @property {string} [template] - Template string for partial slots
- */
-
-/**
- * @typedef {Object} EventDefinition
- * @property {number} [slot] - Dynamic slot index for function
- * @property {string} [handler] - Handler marker from registry
- * @property {string} [method] - Method name string
- * @property {string} [modifier] - Event modifier (prevent, stop, etc.)
- */
-
-/**
- * @typedef {Object} CompiledElementNode
- * @property {'element'} type - Node type
- * @property {string} tag - HTML tag name
- * @property {Object.<string, AttributeDefinition>} attrs - Attribute definitions
- * @property {Object.<string, EventDefinition>} events - Event bindings
- * @property {Object.<string, string>} slotProps - Prop markers
- * @property {Array<CompiledNode>} children - Child nodes
- */
-
-/**
- * @typedef {Object} CompiledFragmentNode
- * @property {'fragment'} type - Node type
- * @property {Array<CompiledNode>} children - Child nodes
- */
-
-/**
- * @typedef {CompiledTextNode | CompiledElementNode | CompiledFragmentNode} CompiledNode
- */
-
-/**
- * @typedef {Object} AppliedTextNode
- * @property {'text' | 'html'} type - Node type
- * @property {string} value - Actual text content (escaped)
- */
-
-/**
- * @typedef {Object} AppliedElementNode
- * @property {'element'} type - Node type
- * @property {string} tag - HTML tag name
- * @property {Object.<string, string | Object>} attrs - Applied attributes
- * @property {Object.<string, EventDefinition>} events - Event bindings with handlers
- * @property {Object.<string, string>} slotProps - Prop values
- * @property {Array<AppliedNode>} children - Child nodes with values applied
- */
-
-/**
- * @typedef {Object} AppliedFragmentNode
- * @property {'fragment'} type - Node type
- * @property {Array<AppliedNode>} children - Child nodes
- */
-
-/**
- * @typedef {AppliedTextNode | AppliedElementNode | AppliedFragmentNode} AppliedNode
- */
-
-/**
- * Template cache - keyed by statics array reference
- *
- * HTM-inspired optimization: Tagged template literals produce a frozen array
- * that is the SAME object reference for the same template in code.
- * Using the array directly as Map key means:
- * - No string join overhead on cache lookup
- * - O(1) reference equality check instead of O(n) string comparison
- * - No extra memory for cache keys
- *
- * @type {Map<TemplateStringsArray, CompiledNode>}
+ * Template cache - keyed by statics array reference (HTM-style O(1) lookup)
+ * @type {Map<TemplateStringsArray, Object>}
  */
 const templateCache = new Map();
 
 /** Maximum template cache size before cleanup */
 const MAX_CACHE_SIZE = 500;
 
-/** Track cache access times for LRU eviction (keyed by statics array) */
+/** Track cache access times for LRU eviction */
 const cacheAccessTimes = new Map();
 
 /**
- * HTM-inspired optimization: VNode cache for static subtrees
- *
- * Static subtrees (no dynamic slots) produce the same VNode every time.
- * We cache the VNode on the compiled node itself using a WeakMap so:
- * - Subsequent renders reuse the exact same VNode object
- * - Preact sees same reference and skips reconciliation entirely
- * - Memory is automatically freed when compiled template is GC'd
- *
- * @type {WeakMap<CompiledNode, import('../vendor/preact/index.js').VNode>}
- */
-const staticVNodeCache = new WeakMap();
-
-/**
- * Compile a template string into an optimized tree structure
- * @param {TemplateStringsArray} strings - Template literal string parts (frozen array)
- * @returns {CompiledNode} Compiled template with slots for dynamic values
- * @example
- * const strings = ['<div class="', '">', '</div>'];
- * const compiled = compileTemplate(strings);
- * // Returns structured tree with slot for class value
+ * Compile a template string into an optimized op-based structure
+ * @param {TemplateStringsArray} strings - Template literal string parts
+ * @returns {Object} Compiled template with ops and pre-built statics
  */
 export function compileTemplate(strings) {
-    // HTM-inspired optimization: Use statics array directly as Map key
-    // Tagged template literals produce the same frozen array reference for
-    // the same template in code, so we get O(1) lookup via reference equality
+    // HTM-style cache lookup using array reference
     if (templateCache.has(strings)) {
-        // Update access time for LRU tracking
         cacheAccessTimes.set(strings, Date.now());
         return templateCache.get(strings);
     }
 
-    // Parse the full template string with slot markers
+    // Build full template string with slot markers
     let fullTemplate = '';
     for (let i = 0; i < strings.length; i++) {
         fullTemplate += strings[i];
@@ -203,14 +100,11 @@ export function compileTemplate(strings) {
         }
     }
 
-    // Parse XML into tree structure (preserves all nodes, allows self-closing tags)
-    const compiled = parseXMLToTree(fullTemplate);
+    // Parse and build op-based structure
+    const parsed = parseXMLToTree(fullTemplate);
+    const compiled = buildOpTree(parsed);
 
-    // HTM-inspired optimization: Mark static subtrees
-    // Static subtrees have no dynamic slots and can be cached as VNodes
-    markStaticSubtrees(compiled);
-
-    // Cache the compiled template using statics array as key
+    // Cache the compiled template
     templateCache.set(strings, compiled);
     cacheAccessTimes.set(strings, Date.now());
 
@@ -223,17 +117,12 @@ export function compileTemplate(strings) {
 }
 
 /**
- * Clean up least recently used templates when cache grows too large
- * Removes oldest 25% of entries based on access time
- *
- * Note: Keys are statics arrays (object references), which is fine for Map operations
+ * Clean up least recently used templates
  */
 function cleanupTemplateCache() {
-    // Sort entries by access time (statics array → timestamp)
     const entries = Array.from(cacheAccessTimes.entries())
-        .sort((a, b) => a[1] - b[1]); // Sort by timestamp (oldest first)
+        .sort((a, b) => a[1] - b[1]);
 
-    // Remove oldest 25% of entries
     const toRemove = Math.floor(entries.length * 0.25);
     for (let i = 0; i < toRemove; i++) {
         const [staticsArray] = entries[i];
@@ -243,94 +132,661 @@ function cleanupTemplateCache() {
 }
 
 /**
- * HTM-inspired optimization: Mark subtrees as static or dynamic
- *
- * A node is static if:
- * - It's a text node with a static value (no slot)
- * - It's an element with all static attributes, no events with slots, and all children static
- * - It's a fragment with all static children
- *
- * Static subtrees can have their VNodes cached and reused on subsequent renders.
- *
- * @param {CompiledNode} node - The node to analyze
- * @returns {boolean} True if the node is static
+ * Build optimized op tree from parsed structure
+ * Pre-builds static VNodes and creates flat op structure
  */
-function markStaticSubtrees(node) {
-    if (!node) return true;
+function buildOpTree(node) {
+    if (!node) return null;
+
+    // Check if entire subtree is static (no dynamic slots)
+    if (isFullyStatic(node)) {
+        // Pre-build the VNode at compile time!
+        const staticVNode = buildStaticVNode(node);
+        return {
+            op: OP.STATIC,
+            vnode: staticVNode,
+            // Keep type info for compatibility with existing code (e.g., each() checks child.children)
+            type: 'fragment',
+            children: [],  // Required for compatibility with each() helper
+            isStatic: true
+        };
+    }
 
     if (node.type === 'text') {
-        // Text is static if it has no slot (dynamic value)
-        node.isStatic = node.slot === undefined;
-        return node.isStatic;
+        if (node.slot !== undefined) {
+            return {
+                op: OP.SLOT,
+                index: node.slot,
+                context: node.context || 'content',
+                type: 'text'
+            };
+        }
+        return {
+            op: OP.TEXT,
+            value: node.value,
+            type: 'text',
+            isStatic: true
+        };
     }
 
     if (node.type === 'fragment') {
-        // Fragment is static if all children are static
-        let allChildrenStatic = true;
-        for (const child of node.children || []) {
-            if (!markStaticSubtrees(child)) {
-                allChildrenStatic = false;
-            }
-        }
-        node.isStatic = allChildrenStatic;
-        return node.isStatic;
+        const children = (node.children || [])
+            .map(child => buildOpTree(child))
+            .filter(Boolean);
+
+        return {
+            op: OP.FRAGMENT,
+            children,
+            wrapped: node.wrapped,
+            fromEach: node.fromEach,
+            key: node.key,
+            type: 'fragment',
+            isStatic: children.every(c => c.isStatic)
+        };
     }
 
     if (node.type === 'element') {
-        let isStatic = true;
+        const isCustomElement = componentDefinitions.has(node.tag);
 
-        // Check attributes for slots
+        // Separate static props from dynamic props
+        const staticProps = {};
+        const dynamicProps = [];
+
+        for (const [name, attrDef] of Object.entries(node.attrs || {})) {
+            if (attrDef.value !== undefined && attrDef.slot === undefined &&
+                attrDef.slots === undefined && attrDef.xModel === undefined &&
+                attrDef.refName === undefined) {
+                // Fully static prop
+                staticProps[name] = attrDef.value;
+            } else {
+                // Dynamic prop - needs runtime resolution
+                dynamicProps.push({ name, def: attrDef });
+            }
+        }
+
+        // Pre-process events
+        const events = [];
+        for (const [eventName, eventDef] of Object.entries(node.events || {})) {
+            events.push({ name: eventName, def: eventDef });
+        }
+
+        // Build children ops
+        const children = (node.children || [])
+            .map(child => buildOpTree(child))
+            .filter(Boolean);
+
+        return {
+            op: OP.ELEMENT,
+            tag: node.tag,
+            staticProps,
+            dynamicProps,
+            events,
+            children,
+            isCustomElement,
+            key: node.key,
+            type: 'element',
+            isStatic: dynamicProps.length === 0 && events.length === 0 &&
+                      children.every(c => c.isStatic)
+        };
+    }
+
+    return null;
+}
+
+/**
+ * Check if a node subtree is fully static (no dynamic slots)
+ */
+function isFullyStatic(node) {
+    if (!node) return true;
+
+    if (node.type === 'text') {
+        return node.slot === undefined;
+    }
+
+    if (node.type === 'fragment') {
+        return (node.children || []).every(isFullyStatic);
+    }
+
+    if (node.type === 'element') {
+        // Custom elements are never static - they need special children handling (_vdxChildren)
+        if (componentDefinitions.has(node.tag)) {
+            return false;
+        }
+
+        // Check attrs for any dynamic content
         for (const attrDef of Object.values(node.attrs || {})) {
             if (attrDef.slot !== undefined || attrDef.slots !== undefined ||
                 attrDef.xModel !== undefined || attrDef.refName !== undefined) {
-                isStatic = false;
-                break;
+                return false;
             }
         }
 
-        // Check events for slots (event handlers with slot references are dynamic)
-        if (isStatic) {
-            for (const eventDef of Object.values(node.events || {})) {
-                if (eventDef.slot !== undefined || eventDef.xModel !== undefined) {
-                    isStatic = false;
-                    break;
-                }
-            }
+        // Check events - any event makes it non-static (needs component context)
+        if (Object.keys(node.events || {}).length > 0) {
+            return false;
         }
 
-        // Check children recursively
-        if (isStatic) {
-            for (const child of node.children || []) {
-                if (!markStaticSubtrees(child)) {
-                    isStatic = false;
-                    // Don't break - we still want to mark children
-                }
-            }
-        } else {
-            // Even if this node is dynamic, mark children so we can cache static subtrees
-            for (const child of node.children || []) {
-                markStaticSubtrees(child);
-            }
-        }
-
-        node.isStatic = isStatic;
-        return isStatic;
+        // Check children
+        return (node.children || []).every(isFullyStatic);
     }
 
     return true;
 }
 
 /**
+ * Build a static VNode at compile time (no dynamic values)
+ */
+function buildStaticVNode(node) {
+    if (!node) return null;
+
+    if (node.type === 'text') {
+        return node.value || '';
+    }
+
+    if (node.type === 'fragment') {
+        const children = (node.children || [])
+            .map(child => buildStaticVNode(child))
+            .filter(child => child !== null && child !== undefined);
+
+        if (children.length === 0) return null;
+        if (children.length === 1) return children[0];
+
+        return h(Fragment, null, ...children);
+    }
+
+    if (node.type === 'element') {
+        const props = {};
+
+        // Convert static attrs to props
+        for (const [name, attrDef] of Object.entries(node.attrs || {})) {
+            if (attrDef.value !== undefined) {
+                let propName = name;
+                if (name === 'class') propName = 'className';
+                else if (name === 'for') propName = 'htmlFor';
+
+                if (BOOLEAN_ATTRS.has(propName)) {
+                    props[propName] = attrDef.value === propName || attrDef.value === 'true' || attrDef.value === true;
+                } else {
+                    props[propName] = attrDef.value;
+                }
+            }
+        }
+
+        // Build static children
+        const children = (node.children || [])
+            .map(child => buildStaticVNode(child))
+            .filter(child => child !== null && child !== undefined);
+
+        return h(node.tag, props, ...children);
+    }
+
+    return null;
+}
+
+/**
+ * Apply values to compiled template - optimized op interpreter
+ * @param {Object} compiled - Compiled template with ops
+ * @param {Array} values - Dynamic values to fill slots
+ * @param {HTMLElement} [component] - Component instance for binding
+ * @returns {import('../vendor/preact/index.js').VNode | string | null}
+ */
+export function applyValues(compiled, values, component = null) {
+    if (!compiled) return null;
+
+    // Fast path: fully static - return pre-built VNode directly
+    if (compiled.op === OP.STATIC) {
+        return compiled.vnode;
+    }
+
+    // Dispatch based on op code
+    switch (compiled.op) {
+        case OP.TEXT:
+            return compiled.value;
+
+        case OP.SLOT:
+            return resolveSlotValue(compiled, values, component);
+
+        case OP.FRAGMENT:
+            return applyFragment(compiled, values, component);
+
+        case OP.ELEMENT:
+            return applyElement(compiled, values, component);
+
+        default:
+            // Legacy fallback for old compiled format during transition
+            return applyValuesLegacy(compiled, values, component);
+    }
+}
+
+/**
+ * Resolve a slot value (dynamic interpolation)
+ */
+function resolveSlotValue(compiled, values, component) {
+    let value = values[compiled.index];
+
+    // Handle html() tagged templates
+    if (isHtml(value)) {
+        if (!('_compiled' in value)) {
+            console.error('[applyValues] html() template missing _compiled');
+            return null;
+        }
+        if (value._compiled === null) return null;
+        return applyValues(value._compiled, value._values || [], component);
+    }
+
+    // Handle raw()
+    if (isRaw(value)) {
+        return h('span', { dangerouslySetInnerHTML: { __html: value.toString() } });
+    }
+
+    // Handle null/undefined
+    if (value === null || value === undefined) return null;
+
+    // Handle arrays (could be vnodes or primitives)
+    if (Array.isArray(value)) {
+        if (value.length === 0) return null;
+
+        const hasVNodes = value.some(item => {
+            if (!item) return false;
+            if (typeof item === 'string' || typeof item === 'number') return true;
+            if (typeof item === 'object' && ('type' in item || 'props' in item || '__' in item)) return true;
+            return false;
+        });
+
+        if (hasVNodes) return value;
+        return value.join('');
+    }
+
+    // Security: prevent malicious toString()
+    if (typeof value === 'object') {
+        return Object.prototype.toString.call(value);
+    }
+
+    // Normalize strings
+    if (typeof value === 'string') {
+        value = value.replace(/[\uFEFF\u200B-\u200D\uFFFE\uFFFF]/g, '');
+    }
+
+    return value;
+}
+
+/**
+ * Apply fragment op
+ */
+function applyFragment(compiled, values, component) {
+    const children = compiled.children
+        .map(child => {
+            const childValues = child._itemValues !== undefined ? child._itemValues : values;
+            return applyValues(child, childValues, component);
+        })
+        .filter(child => child !== undefined && child !== false && child !== null);
+
+    if (children.length === 0) return null;
+
+    const props = compiled.key !== undefined ? { key: compiled.key } : null;
+    return h(Fragment, props, ...children);
+}
+
+/**
+ * Apply element op - the main workhorse
+ */
+function applyElement(compiled, values, component) {
+    const props = { ...compiled.staticProps };
+    const isCustomElement = compiled.isCustomElement;
+
+    // Apply dynamic props
+    for (const { name, def } of compiled.dynamicProps) {
+        const value = resolveProp(name, def, values, component, isCustomElement);
+        if (value !== undefined) {
+            // Remap HTML attributes to Preact props
+            let propName = name;
+            if (name === 'class') propName = 'className';
+            else if (name === 'for') propName = 'htmlFor';
+            else if (name === 'style' && isCustomElement) {
+                props._vdxStyle = value;
+                continue;
+            }
+
+            if (name === '__ref__') {
+                // Handle ref
+                props.ref = createRefCallback(def.refName, component);
+                continue;
+            }
+
+            if (BOOLEAN_ATTRS.has(propName)) {
+                props[propName] = value === true ? true : value === false ? false :
+                    typeof value === 'string' ? value : Boolean(value);
+            } else {
+                props[propName] = value;
+            }
+        }
+    }
+
+    // Apply events
+    for (const { name, def } of compiled.events) {
+        const handler = resolveEventHandler(name, def, values, component, isCustomElement);
+        if (handler) {
+            if (name === 'clickoutside' || name === 'click-outside') {
+                props.ref = createClickOutsideRef(handler, props.ref);
+            } else {
+                const propName = 'on' + name.charAt(0).toUpperCase() + name.slice(1);
+                props[propName] = handler;
+            }
+        }
+    }
+
+    // Add key if present
+    if (compiled.key !== undefined) {
+        props.key = compiled.key;
+    }
+
+    // Apply children
+    const children = compiled.children
+        .map(child => {
+            const childValues = child._itemValues !== undefined ? child._itemValues : values;
+            return applyValues(child, childValues, component);
+        })
+        .filter(child => child !== undefined && child !== false);
+
+    // For custom elements, handle children/slots specially
+    if (isCustomElement && children.length > 0) {
+        const { defaultChildren, namedSlots } = groupChildrenBySlot(children);
+        return h(compiled.tag, {
+            ...props,
+            _vdxChildren: defaultChildren,
+            _vdxSlots: namedSlots
+        });
+    }
+
+    return h(compiled.tag, props, ...children);
+}
+
+/**
+ * Resolve a dynamic prop value
+ */
+function resolveProp(name, def, values, component, isCustomElement) {
+    // x-model binding
+    if (def.xModel !== undefined) {
+        if (component && component.state) {
+            let value = getNestedValue(component.state, def.xModel);
+
+            if (def.context === 'x-model-checked') {
+                return !!value;
+            } else if (def.context === 'x-model-radio') {
+                return value === def.radioValue;
+            } else if (def.context === 'x-model-value' && isCustomElement &&
+                       (typeof value === 'object' || typeof value === 'function') && value !== null) {
+                return value;
+            }
+            return value;
+        }
+        return (def.context === 'x-model-checked' || def.context === 'x-model-radio') ? false : '';
+    }
+
+    // Slot-based value
+    if (def.slot !== undefined || def.slots !== undefined) {
+        let value;
+
+        if (def.slots) {
+            // Multiple slots: interpolate template
+            value = def.template;
+            for (const slotIndex of def.slots) {
+                const slotMarker = `__SLOT_${slotIndex}__`;
+                const slotValue = values[slotIndex];
+                value = value.replace(slotMarker, String(slotValue ?? ''));
+            }
+        } else {
+            value = values[def.slot];
+            if (def.template) {
+                value = def.template.replace(`__SLOT_${def.slot}__`, String(value));
+            }
+        }
+
+        // Context-specific handling
+        if (def.context === 'url') {
+            return sanitizeUrl(value) || '';
+        } else if (def.context === 'custom-element-attr') {
+            return value;
+        }
+
+        if (value !== undefined && value !== null && typeof value !== 'boolean') {
+            return String(value);
+        }
+        return value;
+    }
+
+    // Ref
+    if (def.refName !== undefined) {
+        return def;  // Will be handled by caller
+    }
+
+    return def.value;
+}
+
+/**
+ * Create a ref callback for component refs
+ */
+function createRefCallback(refName, component) {
+    return (el) => {
+        if (component) {
+            if (el) {
+                component.refs[refName] = el;
+            } else {
+                delete component.refs[refName];
+            }
+        }
+    };
+}
+
+/**
+ * Create a ref callback for click-outside handling
+ */
+function createClickOutsideRef(handler, existingRef) {
+    let lastEl = null;
+
+    return (el) => {
+        if (existingRef) existingRef(el);
+
+        if (lastEl && lastEl._clickOutsideHandler) {
+            document.removeEventListener('click', lastEl._clickOutsideHandler);
+            delete lastEl._clickOutsideHandler;
+        }
+
+        if (el) {
+            const documentHandler = (e) => {
+                if (!el.contains(e.target)) {
+                    handler(e);
+                }
+            };
+            el._clickOutsideHandler = documentHandler;
+            document.addEventListener('click', documentHandler);
+            lastEl = el;
+        } else {
+            lastEl = null;
+        }
+    };
+}
+
+/**
+ * Resolve an event handler
+ */
+function resolveEventHandler(eventName, def, values, component, isCustomElement) {
+    let handler = null;
+
+    if (def.xModel !== undefined) {
+        // x-model binding: create state update handler
+        const propName = def.xModel;
+        handler = (e) => {
+            if (component && component.state) {
+                let value;
+
+                if (def.customElement) {
+                    value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
+                } else {
+                    const target = e.target;
+
+                    if (target.type === 'checkbox') {
+                        value = target.checked;
+                    } else if (target.type === 'radio') {
+                        if (target.checked) {
+                            value = target.value;
+                        } else {
+                            return;
+                        }
+                    } else if (target.type === 'number' || target.type === 'range') {
+                        value = target.valueAsNumber;
+                        if (isNaN(value)) value = target.value;
+                    } else if (target.type === 'file') {
+                        value = target.files;
+                    } else {
+                        value = target.value;
+                    }
+                }
+
+                setNestedValue(component.state, propName, value);
+            }
+        };
+    } else if (def.slot !== undefined) {
+        handler = values[def.slot];
+    } else if (def.handler && typeof def.handler === 'function') {
+        handler = def.handler;
+    } else if (def.method && component && component[def.method]) {
+        handler = component[def.method].bind(component);
+    }
+
+    if (handler && typeof handler === 'function') {
+        // Apply modifiers
+        if (def.modifier === 'prevent') {
+            const orig = handler;
+            handler = (e) => { e.preventDefault(); return orig(e); };
+        }
+        if (def.modifier === 'stop') {
+            const orig = handler;
+            handler = (e) => { e.stopPropagation(); return orig(e); };
+        }
+
+        // Chain with existing handler if needed
+        if (def._chainWith) {
+            const firstHandler = resolveEventHandler(eventName, def._chainWith, values, component, isCustomElement);
+            if (firstHandler) {
+                const secondHandler = handler;
+                handler = (e) => { firstHandler(e); secondHandler(e); };
+            }
+        }
+
+        // Wrap for custom elements to extract e.detail.value
+        if (isCustomElement && !def.xModel) {
+            const orig = handler;
+            handler = (e) => {
+                const value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
+                return orig(e, value);
+            };
+        }
+    }
+
+    return handler;
+}
+
+/**
+ * Group children by slot name for custom elements
+ */
+function groupChildrenBySlot(children) {
+    const defaultChildren = [];
+    const namedSlots = {};
+
+    for (const child of children) {
+        if (child && typeof child === 'object' && child.props && child.props.slot) {
+            const slotName = child.props.slot;
+            if (!namedSlots[slotName]) {
+                namedSlots[slotName] = [];
+            }
+            namedSlots[slotName].push(child);
+        } else {
+            defaultChildren.push(child);
+        }
+    }
+
+    return { defaultChildren, namedSlots: Object.keys(namedSlots).length > 0 ? namedSlots : {} };
+}
+
+/**
+ * Legacy applyValues for backwards compatibility during transition
+ * This handles the old tree-based compiled format
+ */
+function applyValuesLegacy(compiled, values, component) {
+    if (!compiled) return null;
+
+    // Handle fragments
+    if (compiled.type === 'fragment') {
+        const children = (compiled.children || [])
+            .map(child => {
+                const childValues = child._itemValues !== undefined ? child._itemValues : values;
+                return applyValues(child, childValues, component);
+            })
+            .filter(child => child !== undefined && child !== false && child !== null);
+
+        if (children.length === 0) return null;
+
+        const props = compiled.key !== undefined ? { key: compiled.key } : null;
+        return h(Fragment, props, ...children);
+    }
+
+    // Handle text nodes
+    if (compiled.type === 'text') {
+        if (compiled.slot !== undefined) {
+            return resolveSlotValue({ index: compiled.slot, context: compiled.context }, values, component);
+        }
+        return compiled.value;
+    }
+
+    // Handle elements - delegate to applyElement with legacy conversion
+    if (compiled.type === 'element') {
+        // Convert legacy format to new format on-the-fly
+        const converted = {
+            op: OP.ELEMENT,
+            tag: compiled.tag,
+            staticProps: {},
+            dynamicProps: [],
+            events: [],
+            children: compiled.children || [],
+            isCustomElement: componentDefinitions.has(compiled.tag),
+            key: compiled.key
+        };
+
+        // Convert attrs
+        for (const [name, attrDef] of Object.entries(compiled.attrs || {})) {
+            if (attrDef.value !== undefined && attrDef.slot === undefined &&
+                attrDef.slots === undefined && attrDef.xModel === undefined &&
+                attrDef.refName === undefined) {
+                converted.staticProps[name] = attrDef.value;
+            } else {
+                converted.dynamicProps.push({ name, def: attrDef });
+            }
+        }
+
+        // Convert events
+        for (const [eventName, eventDef] of Object.entries(compiled.events || {})) {
+            converted.events.push({ name: eventName, def: eventDef });
+        }
+
+        return applyElement(converted, values, component);
+    }
+
+    return null;
+}
+
+// ============================================================================
+// XML Parsing (unchanged from before - this is the compile-time parsing)
+// ============================================================================
+
+/**
  * Parse XML string into tree structure
- * Uses DOMParser with XML mode to preserve all text nodes and allow self-closing tags
  */
 function parseXMLToTree(xmlString) {
-    // List of void elements that should be self-closing
     const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
                           'link', 'meta', 'param', 'source', 'track', 'wbr'];
 
-    // Convert boolean attributes to have explicit values for XML compatibility
-    // Split by tags first to process only opening tags
+    // Convert boolean attributes to explicit values
     const tagPattern = /<([a-zA-Z][\w-]*)([^>]*)>/g;
     const booleanAttrs = ['checked', 'selected', 'disabled', 'readonly', 'multiple', 'ismap',
                           'defer', 'declare', 'noresize', 'nowrap', 'noshade', 'compact',
@@ -339,60 +795,38 @@ function parseXMLToTree(xmlString) {
                           'novalidate', 'formnovalidate', 'itemscope'];
 
     xmlString = xmlString.replace(tagPattern, (fullMatch, tagName, attrs) => {
-        // Skip closing tags and tags that are already processed
-        if (fullMatch.startsWith('</')) {
-            return fullMatch;
-        }
+        if (fullMatch.startsWith('</')) return fullMatch;
 
-        // Process each boolean attribute
         let processedAttrs = attrs;
         for (const boolAttr of booleanAttrs) {
-            // Only match the boolean attribute when it's:
-            // 1. Preceded by whitespace
-            // 2. Not inside quotes (no = before it, or if there is =, it's already quoted)
-            // 3. Followed by whitespace, >, /, or end of string
             const pattern = new RegExp(`(\\s${boolAttr})(?=\\s|>|/|$)`, 'gi');
-
-            // Before replacing, make sure we're not inside a quoted string
-            // Split by quotes and only process parts outside quotes
             const parts = processedAttrs.split(/("[^"]*"|'[^']*')/);
             processedAttrs = parts.map((part, index) => {
-                // Even indices are outside quotes, odd indices are inside quotes
                 if (index % 2 === 0) {
                     return part.replace(pattern, `$1="${boolAttr}"`);
                 }
-                return part;  // Don't modify quoted parts
+                return part;
             }).join('');
         }
 
         return `<${tagName}${processedAttrs}>`;
     });
 
-    // Auto-close void elements for XML compatibility
-    // Note: Avoid negative lookbehind (?<!/) for Safari < 16.4 compatibility
+    // Auto-close void elements
     voidElements.forEach(tag => {
         const regex = new RegExp(`<${tag}(\\s[^>]*)?>`, 'gi');
         xmlString = xmlString.replace(regex, (match, attrs) => {
-            // Skip if already self-closed (ends with />)
-            if (match.trimEnd().endsWith('/>')) {
-                return match;
-            }
-            // Make it self-closing for XML compatibility
+            if (match.trimEnd().endsWith('/>')) return match;
             return `<${tag}${attrs || ''} />`;
         });
     });
 
-    // Wrap in a root element for XML parsing
     const parser = new DOMParser();
     const doc = parser.parseFromString(`<root>${xmlString}</root>`, 'text/xml');
 
-    // Check for parse errors
     const parseError = doc.querySelector('parsererror');
     if (parseError) {
         console.error('[parseXMLToTree] Parse error:', parseError.textContent);
-        console.error('[parseXMLToTree] Input:', xmlString);
-        console.error('[parseXMLToTree] Processed XML:', `<root>${xmlString}</root>`);
-        // Return empty fragment instead of failing completely
         return { type: 'fragment', wrapped: false, children: [] };
     }
 
@@ -401,12 +835,10 @@ function parseXMLToTree(xmlString) {
         return { type: 'fragment', wrapped: false, children: [] };
     }
 
-    // Walk the parsed DOM and create our tree
     const children = [];
     for (const node of root.childNodes) {
         const tree = nodeToTree(node);
         if (tree) {
-            // Flatten nested fragments (happens when text nodes contain multiple slots)
             if (tree.type === 'fragment') {
                 children.push(...tree.children);
             } else {
@@ -415,22 +847,16 @@ function parseXMLToTree(xmlString) {
         }
     }
 
-    return {
-        type: 'fragment',
-        wrapped: false,  // Root template fragments are unwrapped
-        children
-    };
+    return { type: 'fragment', wrapped: false, children };
 }
 
 /**
- * Convert a DOM node to our tree structure
+ * Convert DOM node to tree structure
  */
 function nodeToTree(node) {
-    // Text node
     if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent;
 
-        // Check for single slot marker
         const slotMatch = text.match(/^__SLOT_(\d+)__$/);
         if (slotMatch) {
             return {
@@ -440,135 +866,73 @@ function nodeToTree(node) {
             };
         }
 
-        // Check if contains multiple slots (DOMParser merged text nodes)
         if (text.includes('__SLOT_')) {
-            // Split on slot markers and create fragment with multiple nodes
             const parts = text.split(/(__SLOT_\d+__)/);
             const children = parts
-                .filter(part => part) // Remove empty strings
+                .filter(part => part)
                 .map(part => {
-                    const slotMatch = part.match(/^__SLOT_(\d+)__$/);
-                    if (slotMatch) {
-                        return {
-                            type: 'text',
-                            slot: parseInt(slotMatch[1], 10),
-                            context: 'content'
-                        };
+                    const match = part.match(/^__SLOT_(\d+)__$/);
+                    if (match) {
+                        return { type: 'text', slot: parseInt(match[1], 10), context: 'content' };
                     }
-                    return {
-                        type: 'text',
-                        value: part
-                    };
+                    return { type: 'text', value: part };
                 });
-
-            // Return a fragment with multiple text nodes
-            return {
-                type: 'fragment',
-                wrapped: false,  // Text fragments are unwrapped
-                children
-            };
+            return { type: 'fragment', wrapped: false, children };
         }
 
-        // Static text (keep even if just whitespace - important for spacing)
         if (text) {
-            return {
-                type: 'text',
-                value: text
-            };
+            return { type: 'text', value: text };
         }
-
         return null;
     }
 
-    // Element node
     if (node.nodeType === Node.ELEMENT_NODE) {
         const tag = node.tagName.toLowerCase();
         const attrs = {};
         const events = {};
-        let slotProps = {};
 
-        // Parse attributes
         for (const attr of node.attributes) {
             const name = attr.name;
             const value = attr.value;
 
-            // x-model two-way binding (convert to value/checked + onInput/onChange)
+            // x-model
             if (name === 'x-model') {
                 const isCustomElement = componentDefinitions.has(tag);
 
                 if (isCustomElement) {
-                    // Custom elements: use 'value' prop and 'change' event
-                    // The custom component should emit a 'change' event with e.detail.value
-                    attrs['value'] = {
-                        xModel: value,
-                        context: 'x-model-value'
-                    };
-                    events['change'] = {
-                        xModel: value,
-                        modifier: null,
-                        customElement: true  // Flag to use e.detail.value
-                    };
+                    attrs['value'] = { xModel: value, context: 'x-model-value' };
+                    events['change'] = { xModel: value, modifier: null, customElement: true };
                 } else {
-                    // Native elements: determine attribute and event based on input type
                     const inputType = node.getAttribute('type');
 
                     if (inputType === 'checkbox') {
-                        // Checkboxes use 'checked' attribute and 'change' event
-                        attrs['checked'] = {
-                            xModel: value,
-                            context: 'x-model-checked'
-                        };
-                        events['change'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        attrs['checked'] = { xModel: value, context: 'x-model-checked' };
+                        events['change'] = { xModel: value, modifier: null };
                     } else if (inputType === 'radio') {
-                        // Radio buttons use 'checked' attribute and 'change' event
-                        // Store the radio button's value for comparison
                         const radioValue = node.getAttribute('value');
-                        attrs['checked'] = {
-                            xModel: value,
-                            radioValue: radioValue,
-                            context: 'x-model-radio'
-                        };
-                        events['change'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        attrs['checked'] = { xModel: value, radioValue, context: 'x-model-radio' };
+                        events['change'] = { xModel: value, modifier: null };
                     } else if (inputType === 'file') {
-                        // File inputs can't have value binding, only change event
-                        events['change'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        events['change'] = { xModel: value, modifier: null };
                     } else {
-                        // Text, number, select, textarea, etc. use 'value' and 'input'
-                        attrs['value'] = {
-                            xModel: value,
-                            context: 'x-model-value'
-                        };
-                        events['input'] = {
-                            xModel: value,
-                            modifier: null
-                        };
+                        attrs['value'] = { xModel: value, context: 'x-model-value' };
+                        events['input'] = { xModel: value, modifier: null };
                     }
                 }
                 continue;
             }
 
-            // Ref binding - store element reference in component.refs
+            // ref
             if (name === 'ref') {
                 attrs['__ref__'] = { refName: value };
                 continue;
             }
 
-            // Event binding
+            // on-* events
             if (name.startsWith('on-')) {
-                // Parse event name and optional modifier (e.g., "on-submit-prevent")
                 const fullEventName = name.substring(3);
-
-                // Handle special compound event names (like click-outside)
                 let eventName, modifier;
+
                 if (fullEventName === 'click-outside') {
                     eventName = 'clickoutside';
                     modifier = null;
@@ -579,45 +943,30 @@ function nodeToTree(node) {
                 }
 
                 const slotMatch = value.match(/^__SLOT_(\d+)__$/);
-
                 let newHandler;
+
                 if (slotMatch) {
-                    newHandler = {
-                        slot: parseInt(slotMatch[1], 10),
-                        modifier: modifier
-                    };
+                    newHandler = { slot: parseInt(slotMatch[1], 10), modifier };
                 } else if (value.match(/__EVENT_/)) {
-                    // Event handler from registry
-                    newHandler = {
-                        handler: value,
-                        modifier: modifier
-                    };
+                    newHandler = { handler: value, modifier };
                 } else {
-                    // Method name
-                    newHandler = {
-                        method: value,
-                        modifier: modifier
-                    };
+                    newHandler = { method: value, modifier };
                 }
 
-                // Check if this event already has a handler (e.g., from x-model)
                 if (events[eventName]) {
-                    // Store both handlers for later chaining
-                    const existingHandler = events[eventName];
-                    newHandler._chainWith = existingHandler;
+                    newHandler._chainWith = events[eventName];
                 }
 
                 events[eventName] = newHandler;
                 continue;
             }
 
-            // Check for slot in value
+            // Regular attributes
             const slotMatch = value.match(/^__SLOT_(\d+)__$/);
             if (slotMatch) {
                 const slotIndex = parseInt(slotMatch[1], 10);
-
-                // Determine context based on attribute name
                 let context = 'attribute';
+
                 if (name === 'href' || name === 'src' || name === 'action') {
                     context = 'url';
                 } else if (name.startsWith('on')) {
@@ -625,45 +974,27 @@ function nodeToTree(node) {
                 } else if (name === 'style' || name === 'srcdoc') {
                     context = 'dangerous';
                 } else if (tag.includes('-')) {
-                    // Custom element
                     context = 'custom-element-attr';
                 }
 
-                attrs[name] = {
-                    slot: slotIndex,
-                    context,
-                    attrName: name
-                };
+                attrs[name] = { slot: slotIndex, context, attrName: name };
             } else if (value.includes('__SLOT_')) {
-                // Partial slot (mixed static and dynamic)
                 const matches = value.match(/__SLOT_(\d+)__/g);
                 if (matches && matches.length >= 1) {
-                    // Extract all slot indices
                     const slots = matches.map(m => parseInt(m.match(/\d+/)[0], 10));
-
-                    // Store template and all slot indices for interpolation
-                    attrs[name] = {
-                        slots: slots,  // Array of slot indices
-                        context: 'attribute',
-                        attrName: name,
-                        template: value  // Keep template for interpolation
-                    };
+                    attrs[name] = { slots, context: 'attribute', attrName: name, template: value };
                 } else {
-                    // Shouldn't happen, but fallback just in case
                     attrs[name] = { value };
                 }
             } else {
-                // Static attribute
                 attrs[name] = { value };
             }
         }
 
-        // Parse children recursively
         const children = [];
         for (const child of node.childNodes) {
             const childTree = nodeToTree(child);
             if (childTree) {
-                // Flatten nested fragments (happens when text nodes contain multiple slots)
                 if (childTree.type === 'fragment') {
                     children.push(...childTree.children);
                 } else {
@@ -672,17 +1003,9 @@ function nodeToTree(node) {
             }
         }
 
-        return {
-            type: 'element',
-            tag,
-            attrs,
-            events,
-            slotProps,
-            children
-        };
+        return { type: 'element', tag, attrs, events, slotProps: {}, children };
     }
 
-    // Comment node - skip
     if (node.nodeType === Node.COMMENT_NODE) {
         return null;
     }
@@ -691,480 +1014,7 @@ function nodeToTree(node) {
 }
 
 /**
- * Apply values to compiled template slots and return Preact VNode
- * @param {Object} compiled - Compiled template
- * @param {Array} values - Dynamic values to fill slots
- * @param {HTMLElement} [component] - Component instance for binding methods
- * @returns {import('../vendor/preact/index.js').VNode | string | null} Preact VNode
- */
-export function applyValues(compiled, values, component = null) {
-    if (!compiled) return null;
-
-    // HTM-inspired optimization: Return cached VNode for static subtrees
-    // Static nodes have no dynamic slots, so the VNode is always identical
-    // Reusing the same VNode object lets Preact skip reconciliation entirely
-    if (compiled.isStatic && staticVNodeCache.has(compiled)) {
-        return staticVNodeCache.get(compiled);
-    }
-
-    if (compiled.type === 'fragment') {
-        // Apply values to children recursively, returns Preact vnodes
-        const children = compiled.children
-            .map(child => {
-                // Check if child has its own values (from each())
-                const childValues = child._itemValues !== undefined ? child._itemValues : values;
-                return applyValues(child, childValues, component);
-            })
-            .filter(child => child !== undefined && child !== false && child !== null);
-
-        // If no children after filtering, return null instead of empty Fragment
-        if (children.length === 0) {
-            return null;
-        }
-
-        // Return Preact Fragment vnode
-        const props = compiled.key !== undefined ? { key: compiled.key } : null;
-        const vnode = h(Fragment, props, ...children);
-
-        // Cache VNode for static subtrees
-        if (compiled.isStatic) {
-            staticVNodeCache.set(compiled, vnode);
-        }
-
-        return vnode;
-    }
-
-    if (compiled.type === 'text') {
-        if (compiled.slot !== undefined) {
-            let value = values[compiled.slot];
-
-            // Handle html() tagged templates with compiled structure
-            if (isHtml(value)) {
-                // All html() templates must have _compiled in the new system
-                if (!('_compiled' in value)) {
-                    console.error('[applyValues] html() template missing _compiled property - this should not happen');
-                    return null;
-                }
-
-                const compiledValue = value._compiled;
-
-                // If null (from when() returning null), return null directly
-                if (compiledValue === null) {
-                    return null;
-                }
-
-                // Recursively convert ALL nested templates to vnodes
-                // Use the nested template's own values, not the parent's
-                return applyValues(compiledValue, value._values || [], component);
-            }
-
-            // Handle raw()
-            if (isRaw(value)) {
-                return h('span', {
-                    dangerouslySetInnerHTML: { __html: value.toString() }
-                });
-            }
-
-            // Convert value to string (Preact handles escaping)
-            // Handle null/undefined
-            if (value === null || value === undefined) {
-                return null;
-            }
-
-            // Handle arrays - could be array of vnodes (children) or primitives
-            if (Array.isArray(value)) {
-                // Empty array - return null
-                if (value.length === 0) {
-                    return null;
-                }
-
-                // Check if array contains vnodes (Preact elements)
-                // Preact vnodes have 'type', 'props', 'key' properties
-                // Also check for strings (text nodes) which Preact can handle
-                const hasVNodesOrText = value.some(item => {
-                    if (!item) return false;
-                    // String or number - valid child
-                    if (typeof item === 'string' || typeof item === 'number') return true;
-                    // Object with 'type' property - likely a vnode
-                    if (typeof item === 'object' && ('type' in item || 'props' in item || '__' in item)) return true;
-                    return false;
-                });
-
-                if (hasVNodesOrText) {
-                    // Return array directly - Preact will handle mixed arrays of strings and vnodes
-                    return value;
-                }
-
-                // Array of other primitives - join to string
-                return value.join('');
-            }
-
-            // Security: For objects, use Object.prototype.toString to prevent
-            // malicious custom toString() methods from executing
-            if (typeof value === 'object') {
-                // Don't call value.toString() - use the safe default instead
-                return Object.prototype.toString.call(value);  // Returns "[object Object]"
-            }
-
-            // Normalize Unicode to prevent encoding attacks (remove BOM, etc.)
-            if (typeof value === 'string') {
-                // Remove BOM (U+FEFF) and other zero-width characters
-                value = value.replace(/[\uFEFF\u200B-\u200D\uFFFE\uFFFF]/g, '');
-            }
-
-            // Return primitives directly
-            return value;
-        }
-
-        // Static text - return value directly
-        return compiled.value;
-    }
-
-    if (compiled.type === 'element') {
-        const props = {};
-        const isCustomElement = componentDefinitions.has(compiled.tag);
-
-        // Apply attribute slots
-        for (const [name, attrDef] of Object.entries(compiled.attrs)) {
-            let value;
-
-            if (attrDef.xModel !== undefined) {
-                // x-model binding: get value from component state (supports nested paths like "form.interests")
-                if (component && component.state) {
-                    value = getNestedValue(component.state, attrDef.xModel);
-
-                    // For checked attribute (checkbox), ensure boolean
-                    if (attrDef.context === 'x-model-checked') {
-                        value = !!value;
-                    }
-                    // For radio buttons, compare state value with radio's value attribute
-                    else if (attrDef.context === 'x-model-radio') {
-                        value = (value === attrDef.radioValue);
-                    }
-                    // For custom elements with arrays/objects, store in customElementProps
-                    else if (attrDef.context === 'x-model-value' && isCustomElement && (typeof value === 'object' || typeof value === 'function') && value !== null) {
-                        props[name] = value;
-                        continue;
-                    }
-                } else {
-                    value = (attrDef.context === 'x-model-checked' || attrDef.context === 'x-model-radio') ? false : '';
-                }
-            } else if (attrDef.slot !== undefined || attrDef.slots !== undefined) {
-                // Handle single slot (attrDef.slot) or multiple slots (attrDef.slots)
-                if (attrDef.slots) {
-                    // Multiple slots: replace all __SLOT_N__ markers in template
-                    value = attrDef.template;
-                    for (const slotIndex of attrDef.slots) {
-                        const slotMarker = `__SLOT_${slotIndex}__`;
-                        const slotValue = values[slotIndex];
-                        value = value.replace(slotMarker, String(slotValue !== null && slotValue !== undefined ? slotValue : ''));
-                    }
-                } else {
-                    // Single slot
-                    value = values[attrDef.slot];
-
-                    // If there's a template with static parts, interpolate
-                    if (attrDef.template) {
-                        // Replace __SLOT_N__ with the actual value
-                        const slotMarker = `__SLOT_${attrDef.slot}__`;
-                        value = attrDef.template.replace(slotMarker, String(value));
-                    }
-                }
-
-                // Handle different contexts
-                if (attrDef.context === 'url') {
-                    value = sanitizeUrl(value) || '';
-                } else if (attrDef.context === 'custom-element-attr') {
-                    // For custom elements, pass props directly through vnode props
-                    // For framework components with prototype setters, Preact's setProperty
-                    // will use dom[name] = value (triggering propsChanged)
-                    props[name] = value;
-                    continue;
-                } else if (attrDef.context === 'x-model-value') {
-                    // This path is for when x-model value comes from a slot, not directly from component state
-                    // For custom elements, preserve arrays/objects - pass directly through props
-                    if (isCustomElement && (typeof value === 'object' || typeof value === 'function') && value !== null) {
-                        props[name] = value;
-                        continue;
-                    }
-                    // For native elements or primitive values, convert to string
-                    if (typeof value !== 'object' && typeof value !== 'function') {
-                        value = String(value);
-                    }
-                } else if (attrDef.context === 'attribute') {
-                    // Pass booleans/nulls/undefined as-is, escape strings
-                    if (value !== undefined && value !== null && typeof value !== 'boolean') {
-                        value = String(value);  // Don't escape for Preact
-                    }
-                }
-            } else if (attrDef.value !== undefined) {
-                value = attrDef.value;
-            } else if (attrDef.refName !== undefined) {
-                // Handle ref attribute - create Preact ref callback
-                const refName = attrDef.refName;
-                props.ref = (el) => {
-                    if (component) {
-                        if (el) {
-                            component.refs[refName] = el;
-                        } else {
-                            // Element unmounted, clean up ref
-                            delete component.refs[refName];
-                        }
-                    }
-                };
-                continue;
-            } else {
-                continue;
-            }
-
-            // Skip undefined/null values
-            if (value === undefined || value === null) {
-                continue;
-            }
-
-            // Remap HTML attributes to Preact props
-            let propName = name;
-            if (name === 'class') {
-                propName = 'className';
-            } else if (name === 'for') {
-                propName = 'htmlFor';
-            } else if (name === 'style' && isCustomElement) {
-                // For custom elements, pass styles directly through vnode props
-                props._vdxStyle = value;
-                continue;
-            }
-
-            // Convert boolean attributes
-            if (BOOLEAN_ATTRS.has(propName)) {
-                // Only convert actual boolean values, keep strings as-is
-                if (value === true) {
-                    props[propName] = true;
-                } else if (value === false) {
-                    props[propName] = false;
-                } else if (typeof value === 'string') {
-                    // Keep string values as-is (including "true" and "false" strings)
-                    props[propName] = value;
-                } else {
-                    // Convert other values to boolean
-                    props[propName] = Boolean(value);
-                }
-            } else {
-                props[propName] = value;
-            }
-        }
-
-        // Helper function to resolve a single event handler
-        const resolveHandler = (eventDef) => {
-            let handler = null;
-
-            if (eventDef.xModel !== undefined) {
-                // x-model binding: create handler to update component state
-                const propName = eventDef.xModel;
-                handler = (e) => {
-                    if (component && component.state) {
-                        let value;
-
-                        // For custom elements, value is in e.detail.value
-                        if (eventDef.customElement) {
-                            value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
-                        } else {
-                            // For native elements, extract value from target
-                            const target = e.target;
-
-                            // Determine value based on input type
-                            if (target.type === 'checkbox') {
-                                value = target.checked;
-                            } else if (target.type === 'radio') {
-                                // For radio buttons, only update if this one is checked
-                                if (target.checked) {
-                                    value = target.value;
-                                } else {
-                                    return; // Don't update state for unchecked radios
-                                }
-                            } else if (target.type === 'number' || target.type === 'range') {
-                                // Convert to number for number/range inputs
-                                value = target.valueAsNumber;
-                                // Fall back to string value if valueAsNumber is NaN
-                                if (isNaN(value)) {
-                                    value = target.value;
-                                }
-                            } else if (target.type === 'file') {
-                                // For file inputs, provide the FileList
-                                value = target.files;
-                            } else {
-                                // Default: text, textarea, select, etc.
-                                value = target.value;
-                            }
-                        }
-
-                        setNestedValue(component.state, propName, value);
-                    }
-                };
-            } else if (eventDef.slot !== undefined) {
-                handler = values[eventDef.slot];
-            } else if (eventDef.handler && typeof eventDef.handler === 'function') {
-                handler = eventDef.handler;
-            } else if (eventDef.method && component && component[eventDef.method]) {
-                handler = component[eventDef.method].bind(component);
-            }
-
-            if (handler && typeof handler === 'function') {
-                // Apply modifiers
-                if (eventDef.modifier === 'prevent') {
-                    const originalHandler = handler;
-                    handler = (e) => {
-                        e.preventDefault();
-                        return originalHandler(e);
-                    };
-                }
-                if (eventDef.modifier === 'stop') {
-                    const originalHandler = handler;
-                    handler = (e) => {
-                        e.stopPropagation();
-                        return originalHandler(e);
-                    };
-                }
-            }
-
-            return handler;
-        };
-
-        // Convert events to Preact event handlers
-        for (const [eventName, eventDef] of Object.entries(compiled.events)) {
-            // Special handling for click-outside event
-            if (eventName === 'clickoutside' || eventName === 'click-outside') {
-                const clickOutsideHandler = resolveHandler(eventDef);
-                if (clickOutsideHandler && typeof clickOutsideHandler === 'function') {
-                    // Store existing ref if any
-                    const existingRef = props.ref;
-                    // Track the last element for cleanup
-                    let lastEl = null;
-
-                    props.ref = (el) => {
-                        // Call existing ref if present
-                        if (existingRef) existingRef(el);
-
-                        // Clean up previous listener if element changed
-                        if (lastEl && lastEl._clickOutsideHandler) {
-                            document.removeEventListener('click', lastEl._clickOutsideHandler);
-                            delete lastEl._clickOutsideHandler;
-                        }
-
-                        if (el) {
-                            // Set up click-outside listener
-                            const documentHandler = (e) => {
-                                if (!el.contains(e.target)) {
-                                    clickOutsideHandler(e);
-                                }
-                            };
-                            // Store handler for cleanup
-                            el._clickOutsideHandler = documentHandler;
-                            document.addEventListener('click', documentHandler);
-                            lastEl = el;
-                        } else {
-                            lastEl = null;
-                        }
-                    };
-                }
-                continue;
-            }
-
-            const propName = 'on' + eventName.charAt(0).toUpperCase() + eventName.slice(1);
-            let handler = resolveHandler(eventDef);
-
-            // Check if this handler needs to be chained with a previous one (e.g., x-model + on-input)
-            if (eventDef._chainWith && handler) {
-                const firstHandler = resolveHandler(eventDef._chainWith);
-                if (firstHandler) {
-                    // Create closure that calls both handlers in sequence
-                    const secondHandler = handler;
-                    handler = (e) => {
-                        firstHandler(e);
-                        secondHandler(e);
-                    };
-                }
-            }
-
-            // For custom elements, wrap handler to pass e.detail.value as second argument
-            // This allows handlers like (e, val) => this.state.x = val
-            if (isCustomElement && handler && typeof handler === 'function' && !eventDef.xModel) {
-                const originalHandler = handler;
-                handler = (e) => {
-                    // Extract value from e.detail.value (or e.detail if value not present)
-                    const value = (e.detail && e.detail.value !== undefined) ? e.detail.value : e.detail;
-                    return originalHandler(e, value);
-                };
-            }
-
-            if (handler && typeof handler === 'function') {
-                props[propName] = handler;
-            }
-        }
-
-        // Add key if present
-        if (compiled.key !== undefined) {
-            props.key = compiled.key;
-        }
-
-        // Apply children recursively
-        const children = compiled.children
-            .map(child => {
-                // Check if child has its own values (from each())
-                const childValues = child._itemValues !== undefined ? child._itemValues : values;
-                return applyValues(child, childValues, component);
-            })
-            .filter(child => child !== undefined && child !== false);
-
-        // For custom elements, group children by slot and prepare for ref callback
-        // Preact consumes props.children internally - it doesn't set it on DOM elements
-        // So we MUST use a ref callback to set children and slots on custom elements
-        let childrenToSet = [];
-        let slotsToSet = {};
-
-        if (isCustomElement && children.length > 0) {
-            // Group children by slot name
-            const defaultChildren = [];
-            const namedSlots = {};
-
-            for (const child of children) {
-                // Check if child has a slot attribute
-                if (child && typeof child === 'object' && child.props && child.props.slot) {
-                    const slotName = child.props.slot;
-                    if (!namedSlots[slotName]) {
-                        namedSlots[slotName] = [];
-                    }
-                    namedSlots[slotName].push(child);
-                } else {
-                    defaultChildren.push(child);
-                }
-            }
-
-            // Store for ref callback
-            childrenToSet = defaultChildren;
-            if (Object.keys(namedSlots).length > 0) {
-                slotsToSet = namedSlots;
-            }
-        }
-
-        const vnode = isCustomElement ? h(compiled.tag, {
-            ...props,
-            _vdxChildren: childrenToSet,
-            _vdxSlots: slotsToSet
-        }) : h(compiled.tag, props, ...children);
-
-        // Cache VNode for static subtrees
-        if (compiled.isStatic) {
-            staticVNodeCache.set(compiled, vnode);
-        }
-
-        return vnode;
-    }
-
-    return null;
-}
-
-/**
- * Clear template cache (useful for development)
+ * Clear template cache
  */
 export function clearTemplateCache() {
     templateCache.clear();
@@ -1172,8 +1022,7 @@ export function clearTemplateCache() {
 }
 
 /**
- * Trigger template cache cleanup (can be called on route navigation)
- * This is less aggressive than clearTemplateCache() - only removes old entries
+ * Prune template cache
  */
 export function pruneTemplateCache() {
     if (templateCache.size > MAX_CACHE_SIZE * 0.5) {

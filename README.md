@@ -391,3 +391,4 @@ This is an experimental project, but PRs are welcome! Please ensure:
 - **Preact team** - For creating an amazing, tiny VDOM library
 - **Vue.js** - For inspiration on reactivity system
 - **lit-html** - For tagged template literal ideas
+- **developit/htm** - For optimization ideas for template engine
